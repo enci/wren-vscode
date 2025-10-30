@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "publisher": "wren",
   "engines": {
-    "vscode": "^1.75.0"
+    "vscode": "^1.105.0"
   },
   "categories": [
     "Programming Languages"
@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/enci/wren-vscode#readme",
   "license": "MIT",
+  "icon": "resources/icon.png",
   "main": "./out/extension.js",
   "activationEvents": [],
   "contributes": {
