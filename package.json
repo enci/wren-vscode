@@ -1,0 +1,48 @@
+{
+  "name": "wren",
+  "displayName": "Wren",
+  "description": "Visual Studio Code extension for the Wren programming language",
+  "version": "0.1.0",
+  "publisher": "wren",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "wren",
+    "programming language"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enci/wren-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/enci/wren-vscode/issues"
+  },
+  "homepage": "https://github.com/enci/wren-vscode#readme",
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "wren.helloWorld",
+        "title": "Wren: Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "@types/vscode": "^1.105.0",
+    "@vscode/vsce": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
