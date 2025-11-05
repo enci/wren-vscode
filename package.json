@@ -32,6 +32,17 @@
         "command": "wren.helloWorld",
         "title": "Wren: Hello World"
       }
+    ],
+    "languages": [
+      {
+        "id": "wren",
+        "extensions": [".wren"],
+        "aliases": ["Wren"],
+        "icon": {
+          "light": "./resources/icons/wren-file.svg",
+          "dark": "./resources/icons/wren-file.svg"
+        }
+      }
     ]
   },
   "scripts": {
