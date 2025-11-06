@@ -4,7 +4,7 @@ Visual Studio Code extension for the Wren programming language.
 
 ## Features
 
-- Syntax highlighting
+- Syntax highlighting (Wren 0.4 + Attributes)
 - Icon for .wren files
 
 ## Acknowledgements
