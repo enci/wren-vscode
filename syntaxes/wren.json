@@ -186,7 +186,7 @@
                     "begin": "^\\s*(#!?)\\s*(\\w+)\\s*\\(",
                     "beginCaptures": {
                         "1": { "name": "punctuation.attribute.wren" },
-                        "2": { "name": "entity.name.attribute.wren" }
+                        "2": { "name": "entity.name.class.wren" }
                     },
                     "end": "\\)",
                     "endCaptures": {
@@ -207,13 +207,28 @@
                 },
                 {
                     "name": "meta.attribute.simple.wren",
-                    "match": "^\\s*(#!?)\\s*(\\w+)(?:\\s*(=)\\s*(\\w+|\"[^\"]*\"|\\d+|true|false))?",
+                    "match": "^\\s*(#!?)\\s*(\\w+)(?:\\s*(=)\\s*)?",
                     "captures": {
                         "1": { "name": "punctuation.attribute.wren" },
-                        "2": { "name": "entity.name.attribute.wren" },
-                        "3": { "name": "keyword.operator.assignment.wren" },
-                        "4": { "name": "constant.attribute.value.wren" }
+                        "2": { "name": "entity.name.class.wren" },
+                        "3": { "name": "keyword.operator.assignment.wren" }
                     }
+                },
+                {
+                    "name": "constant.language.wren",
+                    "match": "(?<=\\=\\s)(true|false|null)\\b"
+                },
+                {
+                    "name": "constant.numeric.wren",
+                    "match": "(?<=\\=\\s)\\b(0x[0-9a-fA-F]+|\\d+(\\.\\d+)?([eE][+-]?\\d+)?)\\b"
+                },
+                {
+                    "name": "string.quoted.double.wren",
+                    "begin": "(?<=\\=\\s)\"",
+                    "end": "\"",
+                    "patterns": [
+                        { "include": "#stringEscapes" }
+                    ]
                 }
             ]
         },
