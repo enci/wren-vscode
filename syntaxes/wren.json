@@ -180,12 +180,42 @@
             ]
         },
         "attribute": {
-            "name": "meta.attribute.wren",
-            "match": "^\\s*(#\\s*!?)\\s*(\\w+)",
-            "captures": {
-                "1": { "name": "punctuation.attribute.wren" },
-                "2": { "name": "entity.name.attribute.wren" }
-            }
+            "patterns": [
+                {
+                    "name": "meta.attribute.wren",
+                    "begin": "^\\s*(#!?)\\s*(\\w+)\\s*\\(",
+                    "beginCaptures": {
+                        "1": { "name": "punctuation.attribute.wren" },
+                        "2": { "name": "entity.name.attribute.wren" }
+                    },
+                    "end": "\\)",
+                    "endCaptures": {
+                        "0": { "name": "punctuation.attribute.wren" }
+                    },
+                    "patterns": [
+                        {
+                            "name": "variable.parameter.attribute.wren",
+                            "match": "\\w+"
+                        },
+                        {
+                            "name": "keyword.operator.assignment.wren",
+                            "match": "="
+                        },
+                        { "include": "#constant" },
+                        { "include": "#string" }
+                    ]
+                },
+                {
+                    "name": "meta.attribute.simple.wren",
+                    "match": "^\\s*(#!?)\\s*(\\w+)(?:\\s*(=)\\s*(\\w+|\"[^\"]*\"|\\d+|true|false))?",
+                    "captures": {
+                        "1": { "name": "punctuation.attribute.wren" },
+                        "2": { "name": "entity.name.attribute.wren" },
+                        "3": { "name": "keyword.operator.assignment.wren" },
+                        "4": { "name": "constant.attribute.value.wren" }
+                    }
+                }
+            ]
         },
         "method": {
             "name": "meta.method.wren",
