@@ -2,7 +2,7 @@
   "name": "wren",
   "displayName": "Wren Language",
   "description": "Visual Studio Code extension for the Wren programming language",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "BojanEndrovski",
   "engines": {
     "vscode": "^1.105.0"

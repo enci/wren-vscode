@@ -2,6 +2,11 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
+## [0.1.1] - 2025-11-06
+
+### Changed
+- Updated extension icon with higher resolution version
+
 ## [0.1.0] - 2025-11-06
 
 ### Added
