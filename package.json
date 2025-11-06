@@ -43,6 +43,13 @@
           "dark": "./resources/icons/wren-file.svg"
         }
       }
+    ],
+    "grammars": [
+      {
+          "language": "wren",
+          "scopeName": "source.wren",
+          "path": "./syntaxes/wren.json"
+      }
     ]
   },
   "scripts": {
