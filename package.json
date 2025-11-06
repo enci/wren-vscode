@@ -1,6 +1,6 @@
 {
   "name": "wren",
-  "displayName": "Wren",
+  "displayName": "Wren Language",
   "description": "Visual Studio Code extension for the Wren programming language",
   "version": "0.1.0",
   "publisher": "BojanEndrovski",
