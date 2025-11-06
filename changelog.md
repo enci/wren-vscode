@@ -2,9 +2,9 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
-## [0.1.0] - 2025-10-30
+## [0.1.0] - 2025-11-06
 
 ### Added
 - Initial release
-- Basic extension structure
-- Hello World command
+- Syntax highlighting for Wren 0.4 with attributes support
+- Custom icon for .wren files

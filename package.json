@@ -3,7 +3,7 @@
   "displayName": "Wren",
   "description": "Visual Studio Code extension for the Wren programming language",
   "version": "0.1.0",
-  "publisher": "wren",
+  "publisher": "BojanEndrovski",
   "engines": {
     "vscode": "^1.105.0"
   },
@@ -27,12 +27,6 @@
   "main": "./out/extension.js",
   "activationEvents": [],
   "contributes": {
-    "commands": [
-      {
-        "command": "wren.helloWorld",
-        "title": "Wren: Hello World"
-      }
-    ],
     "languages": [
       {
         "id": "wren",
