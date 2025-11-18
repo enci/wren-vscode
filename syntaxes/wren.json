@@ -286,45 +286,26 @@
                 }
             ]
         },
-        "subscriptOperator": {
-            "name": "meta.method.wren",
-            "begin": "\\[",
+        "subscriptOperatorSetter": {
+            "name": "meta.method.subscript.setter.wren",
+            "begin": "\\[([^\\]]+)\\]\\s*=\\s*\\(([^)]*)\\)\\s*\\{",
             "beginCaptures": {
-                "0": {
-                    "name": "entity.name.function.wren"
-                }
+                "0": { "name": "entity.name.function.wren" }
             },
             "end": "}",
             "patterns": [
-                {
-                    "name": "meta.method.identifier.wren",
-                    "begin": "\\w",
-                    "beginCaptures": {
-                        "0": {
-                            "name": "variable.parameter.function.wren"
-                        }
-                    },
-                    "end": "\\]",
-                    "endCaptures": {
-                        "0": {
-                            "name": "entity.name.function.wren"
-                        }
-                    },
-                    "patterns": [
-                        {
-                            "name": "variable.parameter.function.wren",
-                            "match": "\\w+"
-                        }
-                    ]
-                },
-                {
-                    "name": "meta.method.body.wren",
-                    "begin": "{",
-                    "end": "(?=})",
-                    "patterns": [
-                        { "include": "#code" }
-                    ]
-                }
+                { "include": "#code" }
+            ]
+        },
+        "subscriptOperatorGetter": {
+            "name": "meta.method.subscript.getter.wren",
+            "begin": "\\[([^\\]]+)\\]\\s*\\{",
+            "beginCaptures": {
+                "0": { "name": "entity.name.function.wren" }
+            },
+            "end": "}",
+            "patterns": [
+                { "include": "#code" }
             ]
         },
         "class": {
@@ -353,7 +334,8 @@
                         { "include": "#comment" },
                         { "include": "#blockComment" },
                         { "include": "#foreignMethod" },
-                        { "include": "#subscriptOperator" },
+                        { "include": "#subscriptOperatorSetter" },
+                        { "include": "#subscriptOperatorGetter" },
                         { "include": "#method" }
                     ],
                     "end": "(?=})"
