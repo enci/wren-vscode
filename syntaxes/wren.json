@@ -7,6 +7,10 @@
         { "include": "#code" }
     ],
     "repository": {
+        "docComment": {
+            "name": "comment.line.documentation.wren",
+            "match": "///.*"
+        },
         "comment": {
             "name": "comment.line.wren",
             "match": "//.*"
@@ -167,6 +171,7 @@
                 { "include": "#attribute" },
                 { "include": "#class" },
                 { "include": "#blockComment" },
+                { "include": "#docComment" },
                 { "include": "#comment" },
                 { "include": "#block" },
                 { "include": "#keyword" },
@@ -272,6 +277,7 @@
             },
             "end": "\n",
             "patterns": [
+                { "include": "#docComment" },
                 { "include": "#comment" },
                 {
                     "name": "meta.method.identifier.wren",
@@ -331,6 +337,7 @@
                     },
                     "patterns": [
                         { "include": "#attribute" },
+                        { "include": "#docComment" },
                         { "include": "#comment" },
                         { "include": "#blockComment" },
                         { "include": "#foreignMethod" },

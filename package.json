@@ -32,6 +32,7 @@
         "id": "wren",
         "extensions": [".wren"],
         "aliases": ["Wren"],
+        "configuration": "./language-configuration.json",
         "icon": {
           "light": "./resources/icons/wren-file-light.svg",
           "dark": "./resources/icons/wren-file-dark.svg"
