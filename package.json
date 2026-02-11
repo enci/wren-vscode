@@ -25,7 +25,9 @@
   "license": "MIT",
   "icon": "resources/icon.png",
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:wren"
+  ],
   "contributes": {
     "languages": [
       {
@@ -45,7 +47,21 @@
           "scopeName": "source.wren",
           "path": "./syntaxes/wren.json"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Wren",
+      "properties": {
+        "wren.additionalModuleDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Relative paths (per workspace folder) that should be scanned when resolving Wren imports."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

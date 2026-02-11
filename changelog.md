@@ -2,6 +2,15 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Heuristic language service that powers document symbols, autocompletion, and signature help
+- `wren.additionalModuleDirectories` setting to scan extra folders when resolving imports
+
+### Changed
+- Document outline now groups methods, subscripts, and fields under their containing classes
+
 ## [0.1.2] - 2025-11-19
 
 ### Added
