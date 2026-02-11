@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { WrenLanguageService } from './language/languageService';
 import { AggregatedWorkspaceIndex, WrenClassSymbol, WrenMethodSymbol } from './language/types';
+import { analyzeDocument } from './diagnostics';
 
 const KEYWORDS = ['class', 'construct', 'foreign', 'import', 'return', 'static', 'var'];
 
@@ -31,6 +32,30 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.languages.registerSignatureHelpProvider('wren', new AnalyzerSignatureHelpProvider(languageService), '(', ',')
+    );
+
+    // --- Static analysis diagnostics ---
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('wren');
+    context.subscriptions.push(diagnosticCollection);
+
+    const refreshDiagnostics = (document: vscode.TextDocument) => {
+        if (document.languageId !== 'wren') { return; }
+        diagnosticCollection.set(document.uri, analyzeDocument(document));
+    };
+
+    // Analyze all currently open wren documents
+    vscode.workspace.textDocuments.forEach(refreshDiagnostics);
+
+    // Re-analyze on edit (debounced)
+    let diagnosticTimer: ReturnType<typeof setTimeout> | undefined;
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument(event => {
+            if (event.document.languageId !== 'wren') { return; }
+            clearTimeout(diagnosticTimer);
+            diagnosticTimer = setTimeout(() => refreshDiagnostics(event.document), 300);
+        }),
+        vscode.workspace.onDidOpenTextDocument(refreshDiagnostics),
+        vscode.workspace.onDidCloseTextDocument(doc => diagnosticCollection.delete(doc.uri))
     );
 }
 
