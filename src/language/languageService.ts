@@ -2,13 +2,15 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenClassSymbol, WrenFileIndex } from './types';
-import { analyzeDocument, isBuiltinModule, normalizeImportPath } from './astIndex';
-import type { AnalysisOutput } from './astIndex';
+import { analyzeDocument, isBuiltinModule, normalizeImportPath, resolveTypeAtPosition } from './astIndex';
+import type { AnalysisOutput, TypeResolution } from './astIndex';
+import type { Module } from '../../wren-analyzer/src/index.js';
 import { getBuiltinClasses, CORE_CLASSES } from './builtins';
 
 interface CachedAnalysis {
     index: WrenFileIndex;
     diagnostics: vscode.Diagnostic[];
+    module: Module;
 }
 
 interface ExternalCacheEntry {
@@ -54,8 +56,8 @@ export class WrenLanguageService {
         if (cached && cached.index.version === document.version) {
             return cached;
         }
-        const { index, diagnostics } = analyzeDocument(document);
-        const entry = { index, diagnostics };
+        const { index, diagnostics, module } = analyzeDocument(document);
+        const entry = { index, diagnostics, module };
         this.documentCache.set(key, entry);
         return entry;
     }
@@ -104,6 +106,15 @@ export class WrenLanguageService {
             }
         }
         return false;
+    }
+
+    /**
+     * Resolve typed local variables at a character offset in the document.
+     * Returns variable→type mappings and the enclosing class name (for `this.`).
+     */
+    getTypedLocals(document: vscode.TextDocument, offset: number): TypeResolution {
+        const cached = this.analyzeAndCache(document);
+        return resolveTypeAtPosition(cached.module, offset);
     }
 
     async getWorkspaceAggregate(document: vscode.TextDocument): Promise<AggregatedWorkspaceIndex> {

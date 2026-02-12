@@ -7,12 +7,23 @@ import {
     RecursiveVisitor,
 } from '../../wren-analyzer/src/index.js';
 import type {
+    Module,
+    Stmt,
+    Expr,
     ClassStmt,
     Method,
+    Body,
     FieldExpr,
     StaticFieldExpr,
+    VarStmt,
+    ForStmt,
+    BlockStmt,
+    IfStmt,
+    WhileStmt,
+    CallExpr,
     Token,
     Diagnostic,
+    Parameter,
 } from '../../wren-analyzer/src/index.js';
 import { WrenClassSymbol, WrenFieldSymbol, WrenFileIndex, WrenImportSymbol, WrenMethodSymbol } from './types';
 
@@ -25,6 +36,7 @@ const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
 export interface AnalysisOutput {
     index: WrenFileIndex;
     diagnostics: vscode.Diagnostic[];
+    module: Module;
 }
 
 // Built-in modules provided by the Wren VM — no .wren file to resolve
@@ -93,7 +105,7 @@ export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
         return diag;
     });
 
-    return { index, diagnostics };
+    return { index, diagnostics, module };
 }
 
 function stripQuotes(text: string): string {
@@ -268,6 +280,240 @@ function tokenRange(document: vscode.TextDocument, token: Token): vscode.Range {
         document.positionAt(token.start + token.length),
     );
 }
+
+// ============================================================================
+// Scope-aware type resolution
+// ============================================================================
+
+export interface TypeResolution {
+    /** Variable name → type name (e.g. "c" → "C", "n" → "Num") */
+    locals: Map<string, string>;
+    /** The class name the cursor is inside, if any (for `this.` resolution) */
+    enclosingClass: string | null;
+}
+
+/**
+ * Resolves the types of all visible local variables at a given character offset.
+ * Walks the module AST, collecting VarStmt and Parameter type annotations
+ * that are visible at the cursor position, respecting lexical scoping.
+ */
+export function resolveTypeAtPosition(module: Module, offset: number): TypeResolution {
+    const locals = new Map<string, string>();
+    let enclosingClass: string | null = null;
+
+    // Walk top-level statements
+    for (const stmt of module.statements) {
+        if (stmt.kind === 'ClassStmt') {
+            const cls = stmt;
+            const classStart = cls.foreignKeyword?.start ?? cls.classKeyword.start;
+            const classEnd = cls.rightBrace.start + cls.rightBrace.length;
+
+            if (offset >= classStart && offset <= classEnd) {
+                enclosingClass = cls.name.text;
+                // Search inside this class's methods
+                for (const method of cls.methods) {
+                    collectFromMethod(method, offset, locals);
+                }
+                break; // Cursor is inside this class, stop top-level walk
+            }
+        } else if (stmt.kind === 'VarStmt') {
+            // Module-level var: visible if declared before cursor
+            if (stmt.name.start < offset) {
+                const typeName = resolveVarType(stmt);
+                if (typeName) {
+                    locals.set(stmt.name.text, typeName);
+                }
+            }
+        }
+    }
+
+    return { locals, enclosingClass };
+}
+
+function collectFromMethod(method: Method, offset: number, locals: Map<string, string>): void {
+    if (!method.body) return;
+
+    // Check if cursor is inside this method's body
+    // Method range: from first keyword to end (we approximate using body content)
+    const methodStart = method.foreignKeyword?.start
+        ?? method.staticKeyword?.start
+        ?? method.constructKeyword?.start
+        ?? method.name.start;
+
+    // We need the end of the method body. Since Body doesn't store its closing brace,
+    // we check if offset is after method start. If the cursor is inside any of this
+    // method's body statements, we'll find it during traversal.
+    if (offset < methodStart) return;
+
+    // Collect method parameters
+    if (method.parameters) {
+        for (const param of method.parameters) {
+            if (param.typeAnnotation) {
+                locals.set(param.name.text, param.typeAnnotation.name.text);
+            }
+        }
+    }
+
+    // Collect subscript parameters
+    if (method.subscriptParameters) {
+        for (const param of method.subscriptParameters) {
+            if (param.typeAnnotation) {
+                locals.set(param.name.text, param.typeAnnotation.name.text);
+            }
+        }
+    }
+
+    // Walk body
+    collectFromBody(method.body, offset, locals);
+}
+
+function collectFromBody(body: Body, offset: number, locals: Map<string, string>): void {
+    // Block argument parameters (e.g. {|x| ... })
+    if (body.parameters) {
+        for (const param of body.parameters) {
+            if (param.typeAnnotation) {
+                locals.set(param.name.text, param.typeAnnotation.name.text);
+            }
+        }
+    }
+
+    if (body.statements) {
+        collectFromStatements(body.statements, offset, locals);
+    }
+}
+
+function collectFromStatements(statements: Stmt[], offset: number, locals: Map<string, string>): void {
+    for (const stmt of statements) {
+        collectFromStmt(stmt, offset, locals);
+    }
+}
+
+function collectFromStmt(stmt: Stmt, offset: number, locals: Map<string, string>): void {
+    switch (stmt.kind) {
+        case 'VarStmt':
+            // Only collect if declared before cursor
+            if (stmt.name.start < offset) {
+                const typeName = resolveVarType(stmt);
+                if (typeName) {
+                    locals.set(stmt.name.text, typeName);
+                }
+            }
+            break;
+
+        case 'BlockStmt':
+            collectFromStatements(stmt.statements, offset, locals);
+            break;
+
+        case 'IfStmt':
+            collectFromStmt(stmt.thenBranch, offset, locals);
+            if (stmt.elseBranch) {
+                collectFromStmt(stmt.elseBranch, offset, locals);
+            }
+            break;
+
+        case 'WhileStmt':
+            collectFromStmt(stmt.body, offset, locals);
+            break;
+
+        case 'ForStmt':
+            // For loop variable with type annotation
+            if (stmt.variable.start < offset && stmt.typeAnnotation) {
+                locals.set(stmt.variable.text, stmt.typeAnnotation.name.text);
+            }
+            collectFromStmt(stmt.body, offset, locals);
+            break;
+
+        default:
+            // Expression statements — walk into CallExpr block arguments
+            collectFromExprBlockArgs(stmt, offset, locals);
+            break;
+    }
+}
+
+/**
+ * Walk expression trees looking for block arguments (closures) that may
+ * contain the cursor position and have typed parameters or var declarations.
+ */
+function collectFromExprBlockArgs(expr: Expr | Stmt, offset: number, locals: Map<string, string>): void {
+    if (!expr || typeof expr !== 'object' || !('kind' in expr)) return;
+
+    if (expr.kind === 'CallExpr') {
+        if (expr.blockArgument) {
+            collectFromBody(expr.blockArgument, offset, locals);
+        }
+    }
+}
+
+/**
+ * Resolve the type of a VarStmt from its annotation or initializer.
+ */
+function resolveVarType(stmt: VarStmt): string | null {
+    // Explicit type annotation takes priority
+    if (stmt.typeAnnotation) {
+        return stmt.typeAnnotation.name.text;
+    }
+
+    // Infer from initializer expression
+    if (stmt.initializer) {
+        return inferExprType(stmt.initializer);
+    }
+
+    return null;
+}
+
+/**
+ * Infer the type of an expression from its AST node kind.
+ */
+function inferExprType(expr: Expr): string | null {
+    switch (expr.kind) {
+        case 'NumExpr':
+            return 'Num';
+        case 'StringExpr':
+        case 'InterpolationExpr':
+            return 'String';
+        case 'BoolExpr':
+            return 'Bool';
+        case 'NullExpr':
+            return 'Null';
+        case 'ListExpr':
+            return 'List';
+        case 'MapExpr':
+            return 'Map';
+        case 'CallExpr': {
+            // Foo.new() → type is Foo
+            const call = expr;
+            if (call.name.text === 'new' && call.receiver) {
+                const receiverName = getReceiverClassName(call.receiver);
+                if (receiverName) {
+                    return receiverName;
+                }
+            }
+            return null;
+        }
+        case 'GroupingExpr':
+            return inferExprType(expr.expression);
+        default:
+            return null;
+    }
+}
+
+/**
+ * Extract the class name from a receiver expression (for Foo.new() patterns).
+ */
+function getReceiverClassName(expr: Expr): string | null {
+    // Direct class reference: CallExpr { receiver: null, name: "Foo", arguments: null }
+    if (expr.kind === 'CallExpr') {
+        const call = expr as CallExpr;
+        if (call.receiver === null && call.arguments === null && /^[A-Z]/.test(call.name.text)) {
+            return call.name.text;
+        }
+    }
+    return null;
+}
+
+// ============================================================================
+// Field collection
+// ============================================================================
 
 /**
  * Walks method bodies to collect field usage (_name and __name).

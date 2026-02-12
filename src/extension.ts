@@ -80,6 +80,19 @@ class AnalyzerCompletionProvider implements vscode.CompletionItemProvider {
     ): Promise<vscode.CompletionItem[]> {
         const aggregate = await this.service.getWorkspaceAggregate(document);
         const contextInfo = analyzeCompletionContext(document, position);
+
+        // Resolve type of lowercase receiver via AST type annotations / inference
+        if (contextInfo.isMemberAccess && contextInfo.receiver && !contextInfo.receiverIsClass) {
+            const offset = document.offsetAt(position);
+            const resolution = this.service.getTypedLocals(document, offset);
+
+            if (contextInfo.receiver === 'this') {
+                contextInfo.resolvedType = resolution.enclosingClass ?? undefined;
+            } else {
+                contextInfo.resolvedType = resolution.locals.get(contextInfo.receiver);
+            }
+        }
+
         return buildCompletionItems(aggregate, contextInfo);
     }
 }
@@ -149,6 +162,7 @@ interface CompletionContext {
     isMemberAccess: boolean;
     receiver?: string;
     receiverIsClass: boolean;
+    resolvedType?: string;
     range: vscode.Range;
 }
 
@@ -190,24 +204,33 @@ function buildCompletionItems(aggregate: AggregatedWorkspaceIndex, context: Comp
     };
 
     if (context.isMemberAccess && context.receiver) {
-        const classBucket = aggregate.classes.get(context.receiver);
         if (context.receiverIsClass) {
+            // PascalCase receiver: show static methods of that class
+            const classBucket = aggregate.classes.get(context.receiver);
             if (classBucket) {
                 for (const methods of classBucket.staticMethods.values()) {
                     methods.forEach(method => register(`static:${method.className}:${method.detail}`, createMethodCompletion(method, context.range)));
                 }
-                return items;
             }
-        } else {
-            for (const bucket of aggregate.classes.values()) {
-                for (const methods of bucket.methods.values()) {
+            return items;
+        }
+
+        if (context.resolvedType) {
+            // Type is known: show only instance methods of the resolved class
+            const classBucket = aggregate.classes.get(context.resolvedType);
+            if (classBucket) {
+                for (const methods of classBucket.methods.values()) {
                     methods.forEach(method => register(`instance:${method.className}:${method.detail}`, createMethodCompletion(method, context.range)));
                 }
             }
             return items;
         }
+
+        // Lowercase receiver with unknown type: return empty (don't dump everything)
+        return items;
     }
 
+    // No member access: show keywords and class names
     KEYWORDS.forEach(keyword => {
         const item = new vscode.CompletionItem(keyword, vscode.CompletionItemKind.Keyword);
         item.range = context.range;
@@ -218,15 +241,6 @@ function buildCompletionItems(aggregate: AggregatedWorkspaceIndex, context: Comp
         const item = new vscode.CompletionItem(cls.name, vscode.CompletionItemKind.Class);
         item.range = context.range;
         register(`class:${cls.name}`, item);
-    }
-
-    for (const bucket of aggregate.classes.values()) {
-        for (const methods of bucket.methods.values()) {
-            methods.forEach(method => register(`method:${method.className}:${method.detail}`, createMethodCompletion(method, context.range)));
-        }
-        for (const methods of bucket.staticMethods.values()) {
-            methods.forEach(method => register(`static-global:${method.className}:${method.detail}`, createMethodCompletion(method, context.range)));
-        }
     }
 
     return items;
