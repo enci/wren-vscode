@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenFileIndex } from './types';
-import { normalizeImportPath, parseWrenDocument } from './simpleParser';
+import { buildFileIndex, normalizeImportPath } from './astIndex';
 
 interface ExternalCacheEntry {
     index: WrenFileIndex;
@@ -41,7 +41,7 @@ export class WrenLanguageService {
         if (cached && cached.version === document.version) {
             return cached;
         }
-        const parsed = parseWrenDocument(document);
+        const parsed = buildFileIndex(document);
         this.documentCache.set(key, parsed);
         return parsed;
     }
@@ -137,7 +137,7 @@ export class WrenLanguageService {
 
             const fileUri = vscode.Uri.file(fsPath);
             const diskDocument = await vscode.workspace.openTextDocument(fileUri);
-            const parsed = parseWrenDocument(diskDocument);
+            const parsed = buildFileIndex(diskDocument);
             this.externalCache.set(fsPath, { index: parsed, mtime: stat.mtimeMs });
             return parsed;
         } catch {
