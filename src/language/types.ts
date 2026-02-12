@@ -27,8 +27,9 @@ export interface WrenClassSymbol {
 }
 
 export interface WrenImportSymbol {
-    path: string;          // normalized import path
-    range: vscode.Range;   // range of the import path string in source
+    moduleName: string;        // raw module name as written (e.g. "utils", "random")
+    path: string;              // normalized file path (e.g. "./utils.wren")
+    range: vscode.Range;       // range of the import path string in source
     variables: string[] | null; // names after 'for' (null = import everything)
 }
 

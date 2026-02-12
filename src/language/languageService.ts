@@ -1,9 +1,10 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenFileIndex } from './types';
+import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenClassSymbol, WrenFileIndex } from './types';
 import { analyzeDocument, isBuiltinModule, normalizeImportPath } from './astIndex';
 import type { AnalysisOutput } from './astIndex';
+import { getBuiltinClasses, CORE_CLASSES } from './builtins';
 
 interface CachedAnalysis {
     index: WrenFileIndex;
@@ -13,6 +14,11 @@ interface CachedAnalysis {
 interface ExternalCacheEntry {
     analysis: CachedAnalysis;
     mtime: number;
+}
+
+interface IndexEntry {
+    classes: WrenClassSymbol[];
+    visibleNames: Set<string> | null;
 }
 
 export class WrenLanguageService {
@@ -62,14 +68,17 @@ export class WrenLanguageService {
         const cached = this.analyzeAndCache(document);
         const diagnostics = [...cached.diagnostics];
 
-        // Check for unresolved imports
+        // Check for unresolved imports (skip built-in modules)
         for (const imp of cached.index.imports) {
+            if (isBuiltinModule(imp.moduleName)) {
+                continue;
+            }
             const candidates = this.resolveCandidates(document.uri.fsPath, imp.path);
             const found = await this.anyExists(candidates);
             if (!found) {
                 const diag = new vscode.Diagnostic(
                     imp.range,
-                    `Cannot find module "${stripWrenExt(imp.path)}".`,
+                    `Cannot find module "${imp.moduleName}".`,
                     vscode.DiagnosticSeverity.Warning,
                 );
                 diag.source = 'wren-analyzer';
@@ -99,12 +108,12 @@ export class WrenLanguageService {
 
     async getWorkspaceAggregate(document: vscode.TextDocument): Promise<AggregatedWorkspaceIndex> {
         const rootIndex = await this.getFileIndex(document);
-        const entries = await this.collectWorkspaceIndexes(rootIndex);
+        const entries = await this.collectWorkspaceEntries(rootIndex);
         const classes = new Map<string, AggregatedClassIndex>();
 
-        for (const { index: fileIndex, visibleNames } of entries) {
-            for (const cls of fileIndex.classes) {
-                // If this file was imported with `for X, Y`, only include listed classes
+        for (const { classes: entryClasses, visibleNames } of entries) {
+            for (const cls of entryClasses) {
+                // If imported with `for X, Y`, only include listed classes
                 if (visibleNames !== null && !visibleNames.has(cls.name)) {
                     continue;
                 }
@@ -136,11 +145,12 @@ export class WrenLanguageService {
         return { classes };
     }
 
-    private async collectWorkspaceIndexes(
-        entry: WrenFileIndex
-    ): Promise<{ index: WrenFileIndex; visibleNames: Set<string> | null }[]> {
-        const results: { index: WrenFileIndex; visibleNames: Set<string> | null }[] = [];
+    private async collectWorkspaceEntries(entry: WrenFileIndex): Promise<IndexEntry[]> {
+        const results: IndexEntry[] = [];
         const visited = new Set<string>();
+
+        // Core classes are always available (no import needed)
+        results.push({ classes: CORE_CLASSES, visibleNames: null });
 
         // Root file: all its own classes are visible
         const pending: { index: WrenFileIndex; visibleNames: Set<string> | null }[] = [
@@ -154,9 +164,24 @@ export class WrenLanguageService {
                 continue;
             }
             visited.add(fsPath);
-            results.push(current);
+            results.push({
+                classes: current.index.classes,
+                visibleNames: current.visibleNames,
+            });
 
             for (const imp of current.index.imports) {
+                const visibleNames = imp.variables ? new Set(imp.variables) : null;
+
+                // Built-in modules: inject hardcoded class definitions
+                if (isBuiltinModule(imp.moduleName)) {
+                    const builtinClasses = getBuiltinClasses(imp.moduleName);
+                    if (builtinClasses) {
+                        results.push({ classes: builtinClasses, visibleNames });
+                    }
+                    continue;
+                }
+
+                // User modules: resolve from disk
                 const candidates = this.resolveCandidates(fsPath, imp.path);
                 for (const candidate of candidates) {
                     if (visited.has(candidate)) {
@@ -164,12 +189,7 @@ export class WrenLanguageService {
                     }
                     const index = await this.loadIndex(candidate);
                     if (index) {
-                        pending.push({
-                            index,
-                            visibleNames: imp.variables
-                                ? new Set(imp.variables)
-                                : null,
-                        });
+                        pending.push({ index, visibleNames });
                     }
                 }
             }
@@ -233,8 +253,4 @@ export class WrenLanguageService {
         }
         this.additionalSearchRoots = [...roots];
     }
-}
-
-function stripWrenExt(p: string): string {
-    return p.replace(/\.wren$/, '').replace(/^\.\//, '');
 }

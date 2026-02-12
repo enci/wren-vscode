@@ -58,8 +58,9 @@ export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
             classes.push(buildClassSymbol(document, stmt));
         } else if (stmt.kind === 'ImportStmt') {
             const raw = stripQuotes(stmt.path.text);
-            if (raw && !isBuiltinModule(raw)) {
+            if (raw) {
                 imports.push({
+                    moduleName: raw,
                     path: normalizeImportPath(raw),
                     range: new vscode.Range(
                         document.positionAt(stmt.path.start),
