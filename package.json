@@ -58,7 +58,7 @@
             "type": "string"
           },
           "default": [],
-          "description": "Relative paths (per workspace folder) that should be scanned when resolving Wren imports."
+          "description": "Additional directories to search when resolving Wren imports. Relative paths are resolved per workspace folder; absolute paths work as-is (useful in global user settings for engine modules)."
         }
       }
     }
