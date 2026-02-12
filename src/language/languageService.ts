@@ -2,15 +2,21 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenFileIndex } from './types';
-import { buildFileIndex, normalizeImportPath } from './astIndex';
+import { analyzeDocument, normalizeImportPath } from './astIndex';
+import type { AnalysisOutput } from './astIndex';
+
+interface CachedAnalysis {
+    index: WrenFileIndex;
+    diagnostics: vscode.Diagnostic[];
+}
 
 interface ExternalCacheEntry {
-    index: WrenFileIndex;
+    analysis: CachedAnalysis;
     mtime: number;
 }
 
 export class WrenLanguageService {
-    private readonly documentCache = new Map<string, WrenFileIndex>();
+    private readonly documentCache = new Map<string, CachedAnalysis>();
     private readonly externalCache = new Map<string, ExternalCacheEntry>();
     private additionalSearchRoots: string[] = [];
 
@@ -35,15 +41,25 @@ export class WrenLanguageService {
         this.externalCache.delete(fsPath);
     }
 
-    async getFileIndex(document: vscode.TextDocument): Promise<WrenFileIndex> {
+    /** Run full analysis (lexer + parser + resolver + type-checker) and cache the result. */
+    private analyzeAndCache(document: vscode.TextDocument): CachedAnalysis {
         const key = document.uri.fsPath;
         const cached = this.documentCache.get(key);
-        if (cached && cached.version === document.version) {
+        if (cached && cached.index.version === document.version) {
             return cached;
         }
-        const parsed = buildFileIndex(document);
-        this.documentCache.set(key, parsed);
-        return parsed;
+        const { index, diagnostics } = analyzeDocument(document);
+        const entry = { index, diagnostics };
+        this.documentCache.set(key, entry);
+        return entry;
+    }
+
+    async getFileIndex(document: vscode.TextDocument): Promise<WrenFileIndex> {
+        return this.analyzeAndCache(document).index;
+    }
+
+    getDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
+        return this.analyzeAndCache(document).diagnostics;
     }
 
     async getWorkspaceAggregate(document: vscode.TextDocument): Promise<AggregatedWorkspaceIndex> {
@@ -132,14 +148,14 @@ export class WrenLanguageService {
             const stat = await fs.stat(fsPath);
             const cached = this.externalCache.get(fsPath);
             if (cached && cached.mtime === stat.mtimeMs) {
-                return cached.index;
+                return cached.analysis.index;
             }
 
             const fileUri = vscode.Uri.file(fsPath);
             const diskDocument = await vscode.workspace.openTextDocument(fileUri);
-            const parsed = buildFileIndex(diskDocument);
-            this.externalCache.set(fsPath, { index: parsed, mtime: stat.mtimeMs });
-            return parsed;
+            const analysis = analyzeDocument(diskDocument);
+            this.externalCache.set(fsPath, { analysis, mtime: stat.mtimeMs });
+            return analysis.index;
         } catch {
             return undefined;
         }

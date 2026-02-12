@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
-    parseOnly,
+    analyze,
+    DiagnosticSeverity,
     TokenType,
     RecursiveVisitor,
 } from '../../wren-analyzer/src/index.js';
@@ -11,8 +12,20 @@ import type {
     FieldExpr,
     StaticFieldExpr,
     Token,
+    Diagnostic,
 } from '../../wren-analyzer/src/index.js';
 import { WrenClassSymbol, WrenFieldSymbol, WrenFileIndex, WrenMethodSymbol } from './types';
+
+const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
+    [DiagnosticSeverity.Error]: vscode.DiagnosticSeverity.Error,
+    [DiagnosticSeverity.Warning]: vscode.DiagnosticSeverity.Warning,
+    [DiagnosticSeverity.Info]: vscode.DiagnosticSeverity.Information,
+};
+
+export interface AnalysisOutput {
+    index: WrenFileIndex;
+    diagnostics: vscode.Diagnostic[];
+}
 
 export function normalizeImportPath(value: string): string {
     let normalized = value.trim();
@@ -26,9 +39,9 @@ export function normalizeImportPath(value: string): string {
     return path.normalize(sanitized);
 }
 
-export function buildFileIndex(document: vscode.TextDocument): WrenFileIndex {
+export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
     const source = document.getText();
-    const { module } = parseOnly(source, document.uri.fsPath);
+    const { module, diagnostics: rawDiagnostics } = analyze(source, document.uri.fsPath);
 
     const classes: WrenClassSymbol[] = [];
     const imports: string[] = [];
@@ -44,13 +57,28 @@ export function buildFileIndex(document: vscode.TextDocument): WrenFileIndex {
         }
     }
 
-    return {
+    const index: WrenFileIndex = {
         uri: document.uri,
         version: document.version,
         classes,
         imports,
         parsedAt: Date.now(),
     };
+
+    const diagnostics = rawDiagnostics.map(d => {
+        const start = document.positionAt(d.span.start);
+        const end = document.positionAt(d.span.start + d.span.length);
+        const diag = new vscode.Diagnostic(
+            new vscode.Range(start, end),
+            d.message,
+            SEVERITY_MAP[d.severity] ?? vscode.DiagnosticSeverity.Information,
+        );
+        diag.source = 'wren-analyzer';
+        diag.code = d.code;
+        return diag;
+    });
+
+    return { index, diagnostics };
 }
 
 function stripQuotes(text: string): string {

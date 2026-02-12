@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { WrenLanguageService } from './language/languageService';
 import { AggregatedWorkspaceIndex, WrenClassSymbol, WrenMethodSymbol } from './language/types';
-import { analyzeDocument } from './diagnostics';
 
 const KEYWORDS = ['class', 'construct', 'foreign', 'import', 'return', 'static', 'var'];
 
@@ -34,13 +33,13 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.languages.registerSignatureHelpProvider('wren', new AnalyzerSignatureHelpProvider(languageService), '(', ',')
     );
 
-    // --- Static analysis diagnostics ---
+    // --- Static analysis diagnostics (from the same analyze() call that powers IntelliSense) ---
     const diagnosticCollection = vscode.languages.createDiagnosticCollection('wren');
     context.subscriptions.push(diagnosticCollection);
 
     const refreshDiagnostics = (document: vscode.TextDocument) => {
         if (document.languageId !== 'wren') { return; }
-        diagnosticCollection.set(document.uri, analyzeDocument(document));
+        diagnosticCollection.set(document.uri, languageService.getDiagnostics(document));
     };
 
     // Analyze all currently open wren documents
