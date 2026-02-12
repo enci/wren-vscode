@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenFileIndex } from './types';
-import { analyzeDocument, normalizeImportPath } from './astIndex';
+import { analyzeDocument, isBuiltinModule, normalizeImportPath } from './astIndex';
 import type { AnalysisOutput } from './astIndex';
 
 interface CachedAnalysis {
@@ -58,17 +58,57 @@ export class WrenLanguageService {
         return this.analyzeAndCache(document).index;
     }
 
-    getDiagnostics(document: vscode.TextDocument): vscode.Diagnostic[] {
-        return this.analyzeAndCache(document).diagnostics;
+    async getDiagnostics(document: vscode.TextDocument): Promise<vscode.Diagnostic[]> {
+        const cached = this.analyzeAndCache(document);
+        const diagnostics = [...cached.diagnostics];
+
+        // Check for unresolved imports
+        for (const imp of cached.index.imports) {
+            const candidates = this.resolveCandidates(document.uri.fsPath, imp.path);
+            const found = await this.anyExists(candidates);
+            if (!found) {
+                const diag = new vscode.Diagnostic(
+                    imp.range,
+                    `Cannot find module "${stripWrenExt(imp.path)}".`,
+                    vscode.DiagnosticSeverity.Warning,
+                );
+                diag.source = 'wren-analyzer';
+                diag.code = 'unresolved-import';
+                diagnostics.push(diag);
+            }
+        }
+
+        return diagnostics;
+    }
+
+    private async anyExists(paths: string[]): Promise<boolean> {
+        for (const p of paths) {
+            // Check open documents first
+            if (vscode.workspace.textDocuments.some(doc => doc.uri.fsPath === p)) {
+                return true;
+            }
+            try {
+                await fs.stat(p);
+                return true;
+            } catch {
+                // not found, try next
+            }
+        }
+        return false;
     }
 
     async getWorkspaceAggregate(document: vscode.TextDocument): Promise<AggregatedWorkspaceIndex> {
         const rootIndex = await this.getFileIndex(document);
-        const indexes = await this.collectWorkspaceIndexes(rootIndex);
+        const entries = await this.collectWorkspaceIndexes(rootIndex);
         const classes = new Map<string, AggregatedClassIndex>();
 
-        for (const fileIndex of indexes) {
+        for (const { index: fileIndex, visibleNames } of entries) {
             for (const cls of fileIndex.classes) {
+                // If this file was imported with `for X, Y`, only include listed classes
+                if (visibleNames !== null && !visibleNames.has(cls.name)) {
+                    continue;
+                }
+
                 let bucket = classes.get(cls.name);
                 if (!bucket) {
                     bucket = {
@@ -96,29 +136,40 @@ export class WrenLanguageService {
         return { classes };
     }
 
-    private async collectWorkspaceIndexes(entry: WrenFileIndex): Promise<WrenFileIndex[]> {
-        const results: WrenFileIndex[] = [];
+    private async collectWorkspaceIndexes(
+        entry: WrenFileIndex
+    ): Promise<{ index: WrenFileIndex; visibleNames: Set<string> | null }[]> {
+        const results: { index: WrenFileIndex; visibleNames: Set<string> | null }[] = [];
         const visited = new Set<string>();
-        const pending = [entry];
+
+        // Root file: all its own classes are visible
+        const pending: { index: WrenFileIndex; visibleNames: Set<string> | null }[] = [
+            { index: entry, visibleNames: null }
+        ];
 
         while (pending.length > 0) {
             const current = pending.pop()!;
-            const fsPath = current.uri.fsPath;
+            const fsPath = current.index.uri.fsPath;
             if (visited.has(fsPath)) {
                 continue;
             }
             visited.add(fsPath);
             results.push(current);
 
-            for (const request of current.imports) {
-                const candidates = this.resolveCandidates(fsPath, request);
+            for (const imp of current.index.imports) {
+                const candidates = this.resolveCandidates(fsPath, imp.path);
                 for (const candidate of candidates) {
                     if (visited.has(candidate)) {
                         continue;
                     }
                     const index = await this.loadIndex(candidate);
                     if (index) {
-                        pending.push(index);
+                        pending.push({
+                            index,
+                            visibleNames: imp.variables
+                                ? new Set(imp.variables)
+                                : null,
+                        });
                     }
                 }
             }
@@ -166,14 +217,24 @@ export class WrenLanguageService {
         const userPaths = config.get<string[]>('additionalModuleDirectories', []) ?? [];
         const roots = new Set<string>();
         const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-        for (const folder of workspaceFolders) {
-            for (const rel of userPaths) {
-                if (!rel || !rel.trim()) {
-                    continue;
+        for (const entry of userPaths) {
+            if (!entry || !entry.trim()) {
+                continue;
+            }
+            if (path.isAbsolute(entry)) {
+                // Absolute paths work as-is (useful for global user settings)
+                roots.add(entry);
+            } else {
+                // Relative paths are resolved per workspace folder
+                for (const folder of workspaceFolders) {
+                    roots.add(path.resolve(folder.uri.fsPath, entry));
                 }
-                roots.add(path.resolve(folder.uri.fsPath, rel));
             }
         }
         this.additionalSearchRoots = [...roots];
     }
+}
+
+function stripWrenExt(p: string): string {
+    return p.replace(/\.wren$/, '').replace(/^\.\//, '');
 }

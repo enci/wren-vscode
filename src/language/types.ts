@@ -26,11 +26,17 @@ export interface WrenClassSymbol {
     fields: WrenFieldSymbol[];
 }
 
+export interface WrenImportSymbol {
+    path: string;          // normalized import path
+    range: vscode.Range;   // range of the import path string in source
+    variables: string[] | null; // names after 'for' (null = import everything)
+}
+
 export interface WrenFileIndex {
     uri: vscode.Uri;
     version: number;
     classes: WrenClassSymbol[];
-    imports: string[];
+    imports: WrenImportSymbol[];
     parsedAt: number;
 }
 

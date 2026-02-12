@@ -14,7 +14,7 @@ import type {
     Token,
     Diagnostic,
 } from '../../wren-analyzer/src/index.js';
-import { WrenClassSymbol, WrenFieldSymbol, WrenFileIndex, WrenMethodSymbol } from './types';
+import { WrenClassSymbol, WrenFieldSymbol, WrenFileIndex, WrenImportSymbol, WrenMethodSymbol } from './types';
 
 const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
     [DiagnosticSeverity.Error]: vscode.DiagnosticSeverity.Error,
@@ -25,6 +25,13 @@ const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
 export interface AnalysisOutput {
     index: WrenFileIndex;
     diagnostics: vscode.Diagnostic[];
+}
+
+// Built-in modules provided by the Wren VM — no .wren file to resolve
+const BUILTIN_MODULES = new Set(['meta', 'random']);
+
+export function isBuiltinModule(importPath: string): boolean {
+    return BUILTIN_MODULES.has(importPath);
 }
 
 export function normalizeImportPath(value: string): string {
@@ -44,15 +51,22 @@ export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
     const { module, diagnostics: rawDiagnostics } = analyze(source, document.uri.fsPath);
 
     const classes: WrenClassSymbol[] = [];
-    const imports: string[] = [];
+    const imports: WrenImportSymbol[] = [];
 
     for (const stmt of module.statements) {
         if (stmt.kind === 'ClassStmt') {
             classes.push(buildClassSymbol(document, stmt));
         } else if (stmt.kind === 'ImportStmt') {
             const raw = stripQuotes(stmt.path.text);
-            if (raw) {
-                imports.push(normalizeImportPath(raw));
+            if (raw && !isBuiltinModule(raw)) {
+                imports.push({
+                    path: normalizeImportPath(raw),
+                    range: new vscode.Range(
+                        document.positionAt(stmt.path.start),
+                        document.positionAt(stmt.path.start + stmt.path.length),
+                    ),
+                    variables: stmt.variables?.map(v => v.text) ?? null,
+                });
             }
         }
     }

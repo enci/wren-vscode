@@ -37,9 +37,9 @@ export function activate(context: vscode.ExtensionContext) {
     const diagnosticCollection = vscode.languages.createDiagnosticCollection('wren');
     context.subscriptions.push(diagnosticCollection);
 
-    const refreshDiagnostics = (document: vscode.TextDocument) => {
+    const refreshDiagnostics = async (document: vscode.TextDocument) => {
         if (document.languageId !== 'wren') { return; }
-        diagnosticCollection.set(document.uri, languageService.getDiagnostics(document));
+        diagnosticCollection.set(document.uri, await languageService.getDiagnostics(document));
     };
 
     // Analyze all currently open wren documents
