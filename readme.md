@@ -6,25 +6,25 @@ Visual Studio Code extension for the <a href="https://wren.io">Wren</a> programm
 
 ### Syntax Highlighting
 
-Syntax highlighting for Wren 0.4, including attributes (`#`)
+Syntax highlighting for Wren 0.4 (latest)
 
 <!-- TODO: ![Syntax highlighting screenshot](images/syntax-highlighting.png) -->
 
 ### Document Outline & Symbols
 
-Navigate your code with the outline panel. Classes, methods, constructors, subscript operators, and fields are all listed hierarchically.
+Navigate your code with the outline panel. Classes, methods, constructors, subscript operators, and fields (collected from the methods) are listed hierarchically.
 
 <!-- TODO: ![Document outline screenshot](images/document-outline.png) -->
 
 ### Code Completion
 
-Context-aware autocompletion for:
+Context-aware autocompletion:
 
-- **Class names** — all classes in the current file, imported modules, and the Wren core library
-- **Static members** — type `List.` to see `new()`, `filled()`, etc.
-- **Instance methods** — type `value.` to see all known instance methods
-- **Constructors** — `Fiber.new`, `Map.new`, `List.new`, …
 - **Keywords** — `class`, `construct`, `import`, `var`, …
+- **Class names** — all classes in the current file, imported modules, and the Wren library
+- **Static members** — type `List.` to see `new()`, `filled()`, etc.
+- **Instance methods** — type `value.` to see all known instance methods and properties (requires [type-annotations])
+- **Constructors** — `Fiber.new`, `Foo.new`, …
 
 <!-- TODO: ![Code completion screenshot](images/code-completion.png) -->
 
@@ -51,14 +51,10 @@ The extension follows `import` statements to discover classes across your projec
 
 <!-- TODO: ![Import resolution screenshot](images/import-resolution.png) -->
 
-### Built-in API IntelliSense
-
-Code completion for the Wren standard library and the optional modules 
-classes (`Random`, `Meta`) 
 
 ### File Icons
 
-Custom file icons for `.wren` sources in both light and dark themes.
+Last but not least, two custom file icons for `.wren` sources in both light and dark themes. <img src="resources/icons/wren-file-light.svg" width="32" alt="Wren file icon (light theme)"> <img src="resources/icons/wren-file-dark.svg" width="32" alt="Wren file icon (dark theme)">
 
 ---
 
@@ -75,6 +71,8 @@ An array of directories to search when resolving `import` statements.
 
 ## Acknowledgements
 
-Based on the Wren extension by Johann Muszynski.
-
 Analysis powered by [wren-analyzer](https://github.com/enci/wren-analyzer), a TypeScript port of [wrenalyzer](https://github.com/munificent/wrenalyzer) by Bob Nystrom, extended with optional type-checking support.
+
+Based on the Wren extensions by Johann Muszynski and Mike Rubits.
+
+[type-annotations]:https://github.com/enci/wren
