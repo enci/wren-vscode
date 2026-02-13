@@ -8,13 +8,13 @@ Visual Studio Code extension for the <a href="https://wren.io">Wren</a> programm
 
 Syntax highlighting for Wren 0.4 (latest)
 
-<!-- TODO: ![Syntax highlighting screenshot](images/syntax-highlighting.png) -->
+![Syntax highlighting screenshot](resources/screenshots/syntax-highlighting.png)
 
 ### Document Outline & Symbols
 
 Navigate your code with the outline panel. Classes, methods, constructors, subscript operators, and fields (collected from the methods) are listed hierarchically.
 
-<!-- TODO: ![Document outline screenshot](images/document-outline.png) -->
+![Document outline screenshot](resources/screenshots/document-outline.png)
 
 ### Code Completion
 
@@ -26,7 +26,7 @@ Context-aware autocompletion:
 - **Instance methods** — type `value.` to see all known instance methods and properties (requires [type-annotations])
 - **Constructors** — `Fiber.new`, `Foo.new`, …
 
-<!-- TODO: ![Code completion screenshot](images/code-completion.png) -->
+![Code completion screenshot](resources/screenshots/code-completion.png)
 
 ### Signature Help
 

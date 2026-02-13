@@ -5,7 +5,7 @@ import {
     DiagnosticSeverity,
     TokenType,
     RecursiveVisitor,
-} from '../../wren-analyzer/src/index.js';
+} from '../../wren-analyzer/src/index';
 import type {
     Module,
     Stmt,
@@ -24,7 +24,7 @@ import type {
     Token,
     Diagnostic,
     Parameter,
-} from '../../wren-analyzer/src/index.js';
+} from '../../wren-analyzer/src/index';
 import { WrenClassSymbol, WrenFieldSymbol, WrenFileIndex, WrenImportSymbol, WrenMethodSymbol } from './types';
 
 const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
@@ -78,7 +78,7 @@ export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
                         document.positionAt(stmt.path.start),
                         document.positionAt(stmt.path.start + stmt.path.length),
                     ),
-                    variables: stmt.variables?.map(v => v.text) ?? null,
+                    variables: stmt.variables?.map((v: Token) => v.text) ?? null,
                 });
             }
         }
@@ -92,7 +92,7 @@ export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
         parsedAt: Date.now(),
     };
 
-    const diagnostics = rawDiagnostics.map(d => {
+    const diagnostics = rawDiagnostics.map((d: Diagnostic) => {
         const start = document.positionAt(d.span.start);
         const end = document.positionAt(d.span.start + d.span.length);
         const diag = new vscode.Diagnostic(
@@ -193,10 +193,10 @@ function buildMethodSymbol(
     let params: string[];
 
     if (isSubscript) {
-        const subParams = (method.subscriptParameters ?? []).map(p => p.name.text);
+        const subParams = (method.subscriptParameters ?? []).map((p: Parameter) => p.name.text);
 
         if (method.isSetter) {
-            const setterParams = (method.parameters ?? []).map(p => p.name.text);
+            const setterParams = (method.parameters ?? []).map((p: Parameter) => p.name.text);
             name = `[${subParams.join(', ')}]=`;
             params = [...subParams, ...setterParams];
         } else {
@@ -205,7 +205,7 @@ function buildMethodSymbol(
         }
     } else {
         name = method.name.text;
-        params = (method.parameters ?? []).map(p => p.name.text);
+        params = (method.parameters ?? []).map((p: Parameter) => p.name.text);
 
         // Regular setter: name=(value)
         if (method.isSetter) {

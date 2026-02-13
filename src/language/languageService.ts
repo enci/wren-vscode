@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenClassSymbol, WrenFileIndex } from './types';
 import { analyzeDocument, isBuiltinModule, normalizeImportPath, resolveTypeAtPosition } from './astIndex';
 import type { AnalysisOutput, TypeResolution } from './astIndex';
-import type { Module } from '../../wren-analyzer/src/index.js';
+import type { Module } from '../../wren-analyzer/src/index';
 import { getBuiltinClasses, CORE_CLASSES } from './builtins';
 
 interface CachedAnalysis {
