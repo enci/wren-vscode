@@ -6,6 +6,7 @@ import {
     TokenType,
     RecursiveVisitor,
 } from '../../wren-analyzer/src/index';
+import type { AnalysisOptions } from '../../wren-analyzer/src/index';
 import type {
     Module,
     Stmt,
@@ -58,9 +59,12 @@ export function normalizeImportPath(value: string): string {
     return path.normalize(sanitized);
 }
 
-export function analyzeDocument(document: vscode.TextDocument): AnalysisOutput {
+export function analyzeDocument(document: vscode.TextDocument, searchPaths?: string[]): AnalysisOutput {
     const source = document.getText();
-    const { module, diagnostics: rawDiagnostics } = analyze(source, document.uri.fsPath);
+    const options: AnalysisOptions | undefined = searchPaths && searchPaths.length > 0
+        ? { searchPaths }
+        : undefined;
+    const { module, diagnostics: rawDiagnostics } = analyze(source, document.uri.fsPath, options);
 
     const classes: WrenClassSymbol[] = [];
     const imports: WrenImportSymbol[] = [];

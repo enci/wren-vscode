@@ -56,10 +56,35 @@ export class WrenLanguageService {
         if (cached && cached.index.version === document.version) {
             return cached;
         }
-        const { index, diagnostics, module } = analyzeDocument(document);
+        const searchPaths = this.getSearchPaths(document);
+        const { index, diagnostics, module } = analyzeDocument(document, searchPaths);
         const entry = { index, diagnostics, module };
         this.documentCache.set(key, entry);
         return entry;
+    }
+
+    /**
+     * Build the list of search paths for module resolution.
+     * Includes the file's own directory plus any configured additional roots.
+     */
+    private getSearchPaths(document: vscode.TextDocument): string[] {
+        const paths: string[] = [];
+        // The file's own directory (for sibling imports)
+        paths.push(path.dirname(document.uri.fsPath));
+        // Workspace folder roots
+        for (const folder of vscode.workspace.workspaceFolders ?? []) {
+            const root = folder.uri.fsPath;
+            if (!paths.includes(root)) {
+                paths.push(root);
+            }
+        }
+        // User-configured additional search paths
+        for (const root of this.additionalSearchRoots) {
+            if (!paths.includes(root)) {
+                paths.push(root);
+            }
+        }
+        return paths;
     }
 
     async getFileIndex(document: vscode.TextDocument): Promise<WrenFileIndex> {
@@ -235,7 +260,8 @@ export class WrenLanguageService {
 
             const fileUri = vscode.Uri.file(fsPath);
             const diskDocument = await vscode.workspace.openTextDocument(fileUri);
-            const analysis = analyzeDocument(diskDocument);
+            const searchPaths = this.getSearchPaths(diskDocument);
+            const analysis = analyzeDocument(diskDocument, searchPaths);
             this.externalCache.set(fsPath, { analysis, mtime: stat.mtimeMs });
             return analysis.index;
         } catch {
