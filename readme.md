@@ -32,13 +32,13 @@ Context-aware autocompletion:
 
 Inline parameter hints appear as you type inside parentheses, showing all overloads with their parameter names.
 
-<!-- TODO: ![Signature help screenshot](images/signature-help.png) -->
+![Signature help screenshot](resources/screenshots/signature-help.png)
 
 ### Diagnostics
 
 Real-time error and warning squiggles powered by an analysis pipeline (lexer → parser → resolver → (optional) type-checker). Catches syntax errors, unresolved variables, and type annotation warnings as you type.
 
-<!-- TODO: ![Diagnostics screenshot](images/diagnostics.png) -->
+![Diagnostics screenshot](resources/screenshots/diagnostics.png)
 
 ### Import Resolution
 
@@ -47,9 +47,9 @@ The extension follows `import` statements to discover classes across your projec
 - Relative imports (`import "utils"`)
 - Selective imports (`import "utils" for Helper, Config`)
 - Configurable search paths via `wren.additionalModuleDirectories`
-- Unresolved import warnings with squiggles on the import path
+- Unresolved import warnings with squiggles on the import path or the class names when using selective imports 
 
-<!-- TODO: ![Import resolution screenshot](images/import-resolution.png) -->
+![Import resolution screenshot](resources/screenshots/import-resolution.png)
 
 
 ### File Icons
