@@ -54,11 +54,15 @@ The extension follows `import` statements to discover classes across your projec
 
 ### File Icons
 
-Last but not least, two custom file icons for `.wren` sources in both light and dark themes. <img src="resources/icons/wren-file-light.svg" width="32" alt="Wren file icon (light theme)"> <img src="resources/icons/wren-file-dark.svg" width="32" alt="Wren file icon (dark theme)">
+Last but not least, two custom file icons for `.wren` sources in both light and dark themes. <img src="resources/icons/wren-file-light.png" width="32" alt="Wren file icon (light theme)"> <img src="resources/icons/wren-file-dark.png" width="32" alt="Wren file icon (dark theme)">
 
 ---
 
 ## Configuration
+
+### `wren.enableDiagnostics`
+
+Enable or disable analyzer diagnostics (type mismatches, unknown methods, wrong arity, unresolved imports). Default: `true`. Parse errors are always shown regardless of this setting.
 
 ### `wren.additionalModuleDirectories`
 
