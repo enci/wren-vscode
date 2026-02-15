@@ -1,0 +1,3 @@
+[submodule "wren-analyzer"]
+	path = wren-analyzer
+	url = https://github.com/enci/wren-analyzer.git

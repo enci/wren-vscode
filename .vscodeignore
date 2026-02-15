@@ -3,7 +3,9 @@
 .claude/**
 src/**
 test/**
+wren-analyzer/**
 .gitignore
+.gitmodules
 .yarnrc
 tsconfig.json
 **/*.map

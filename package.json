@@ -1,8 +1,8 @@
 {
   "name": "wren",
   "displayName": "Wren Language",
-  "description": "Visual Studio Code extension for the Wren programming language",
-  "version": "0.1.2",
+  "description": "Syntax highlighting, IntelliSense, diagnostics, and code navigation for the Wren programming language",
+  "version": "0.2.0",
   "publisher": "BojanEndrovski",
   "engines": {
     "vscode": "^1.105.0"
@@ -12,7 +12,10 @@
   ],
   "keywords": [
     "wren",
-    "programming language"
+    "programming language",
+    "intellisense",
+    "syntax highlighting",
+    "game scripting"
   ],
   "repository": {
     "type": "git",
@@ -24,8 +27,10 @@
   "homepage": "https://github.com/enci/wren-vscode#readme",
   "license": "MIT",
   "icon": "resources/icon.png",
-  "main": "./out/extension.js",
-  "activationEvents": [],
+  "main": "./out/src/extension.js",
+  "activationEvents": [
+    "onLanguage:wren"
+  ],
   "contributes": {
     "languages": [
       {
@@ -45,7 +50,21 @@
           "scopeName": "source.wren",
           "path": "./syntaxes/wren.json"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Wren",
+      "properties": {
+        "wren.additionalModuleDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional directories to search when resolving Wren imports. Relative paths are resolved per workspace folder; absolute paths work as-is (useful in global user settings for engine modules)."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
