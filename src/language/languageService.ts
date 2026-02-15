@@ -2,9 +2,10 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AggregatedClassIndex, AggregatedWorkspaceIndex, WrenClassSymbol, WrenFileIndex } from './types';
-import { analyzeDocument, isBuiltinModule, normalizeImportPath, resolveTypeAtPosition } from './astIndex';
+import { analyzeDocument, resolveTypeAtPosition } from './astIndex';
 import type { AnalysisOutput, TypeResolution } from './astIndex';
 import type { Module } from '../../wren-analyzer/src/index';
+import { ModuleResolver, isBuiltinModule } from '../../wren-analyzer/src/index';
 import { getBuiltinClasses, CORE_CLASSES } from './builtins';
 
 interface CachedAnalysis {
@@ -92,45 +93,8 @@ export class WrenLanguageService {
     }
 
     async getDiagnostics(document: vscode.TextDocument): Promise<vscode.Diagnostic[]> {
-        const cached = this.analyzeAndCache(document);
-        const diagnostics = [...cached.diagnostics];
-
-        // Check for unresolved imports (skip built-in modules)
-        for (const imp of cached.index.imports) {
-            if (isBuiltinModule(imp.moduleName)) {
-                continue;
-            }
-            const candidates = this.resolveCandidates(document.uri.fsPath, imp.path);
-            const found = await this.anyExists(candidates);
-            if (!found) {
-                const diag = new vscode.Diagnostic(
-                    imp.range,
-                    `Cannot find module "${imp.moduleName}".`,
-                    vscode.DiagnosticSeverity.Warning,
-                );
-                diag.source = 'wren-analyzer';
-                diag.code = 'unresolved-import';
-                diagnostics.push(diag);
-            }
-        }
-
-        return diagnostics;
-    }
-
-    private async anyExists(paths: string[]): Promise<boolean> {
-        for (const p of paths) {
-            // Check open documents first
-            if (vscode.workspace.textDocuments.some(doc => doc.uri.fsPath === p)) {
-                return true;
-            }
-            try {
-                await fs.stat(p);
-                return true;
-            } catch {
-                // not found, try next
-            }
-        }
-        return false;
+        // The analyzer now handles all diagnostics including unresolved-import warnings.
+        return this.analyzeAndCache(document).diagnostics;
     }
 
     /**
@@ -217,13 +181,12 @@ export class WrenLanguageService {
                     continue;
                 }
 
-                // User modules: resolve from disk
-                const candidates = this.resolveCandidates(fsPath, imp.path);
-                for (const candidate of candidates) {
-                    if (visited.has(candidate)) {
-                        continue;
-                    }
-                    const index = await this.loadIndex(candidate);
+                // User modules: resolve from disk using the analyzer's ModuleResolver
+                const resolver = new ModuleResolver(this.getSearchPathsForFile(fsPath));
+                const moduleName = imp.moduleName;
+                const resolvedPath = resolver.resolve(moduleName, fsPath);
+                if (resolvedPath && !visited.has(resolvedPath)) {
+                    const index = await this.loadIndex(resolvedPath);
                     if (index) {
                         pending.push({ index, visibleNames });
                     }
@@ -234,15 +197,22 @@ export class WrenLanguageService {
         return results;
     }
 
-    private resolveCandidates(currentFile: string, importRequest: string): string[] {
-        const normalized = normalizeImportPath(importRequest);
-        const resolved = new Set<string>();
-        const baseDir = path.dirname(currentFile);
-        resolved.add(path.resolve(baseDir, normalized));
-        for (const root of this.additionalSearchRoots) {
-            resolved.add(path.resolve(root, normalized));
+    /** Build search paths for a file path (not a TextDocument). */
+    private getSearchPathsForFile(fsPath: string): string[] {
+        const paths: string[] = [];
+        paths.push(path.dirname(fsPath));
+        for (const folder of vscode.workspace.workspaceFolders ?? []) {
+            const root = folder.uri.fsPath;
+            if (!paths.includes(root)) {
+                paths.push(root);
+            }
         }
-        return [...resolved];
+        for (const root of this.additionalSearchRoots) {
+            if (!paths.includes(root)) {
+                paths.push(root);
+            }
+        }
+        return paths;
     }
 
     private async loadIndex(fsPath: string): Promise<WrenFileIndex | undefined> {

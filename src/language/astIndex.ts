@@ -40,14 +40,8 @@ export interface AnalysisOutput {
     module: Module;
 }
 
-// Built-in modules provided by the Wren VM — no .wren file to resolve
-const BUILTIN_MODULES = new Set(['meta', 'random']);
-
-export function isBuiltinModule(importPath: string): boolean {
-    return BUILTIN_MODULES.has(importPath);
-}
-
-export function normalizeImportPath(value: string): string {
+/** Normalize an import path by appending .wren and ensuring relative prefix. */
+function normalizeImportPath(value: string): string {
     let normalized = value.trim();
     if (!normalized.endsWith('.wren')) {
         normalized = `${normalized}.wren`;
