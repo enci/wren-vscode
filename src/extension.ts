@@ -7,8 +7,22 @@ const KEYWORDS = ['class', 'construct', 'foreign', 'import', 'return', 'static',
 export function activate(context: vscode.ExtensionContext) {
     const languageService = new WrenLanguageService();
 
+    // --- Static analysis diagnostics (from the same analyze() call that powers IntelliSense) ---
+    const diagnosticCollection = vscode.languages.createDiagnosticCollection('wren');
+    context.subscriptions.push(diagnosticCollection);
+
+    const refreshDiagnostics = async (document: vscode.TextDocument) => {
+        if (document.languageId !== 'wren') { return; }
+        diagnosticCollection.set(document.uri, await languageService.getDiagnostics(document));
+    };
+
     context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(event => languageService.handleConfigurationChange(event)),
+        vscode.workspace.onDidChangeConfiguration(event => {
+            languageService.handleConfigurationChange(event);
+            if (event.affectsConfiguration('wren.enableDiagnostics')) {
+                vscode.workspace.textDocuments.forEach(refreshDiagnostics);
+            }
+        }),
         vscode.workspace.onDidChangeTextDocument(event => {
             if (event.document.languageId === 'wren') {
                 languageService.invalidateDocument(event.document);
@@ -32,15 +46,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.languages.registerSignatureHelpProvider('wren', new AnalyzerSignatureHelpProvider(languageService), '(', ',')
     );
-
-    // --- Static analysis diagnostics (from the same analyze() call that powers IntelliSense) ---
-    const diagnosticCollection = vscode.languages.createDiagnosticCollection('wren');
-    context.subscriptions.push(diagnosticCollection);
-
-    const refreshDiagnostics = async (document: vscode.TextDocument) => {
-        if (document.languageId !== 'wren') { return; }
-        diagnosticCollection.set(document.uri, await languageService.getDiagnostics(document));
-    };
 
     // Analyze all currently open wren documents
     vscode.workspace.textDocuments.forEach(refreshDiagnostics);

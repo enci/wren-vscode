@@ -55,6 +55,11 @@
       "type": "object",
       "title": "Wren",
       "properties": {
+        "wren.enableDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable analyzer diagnostics (type mismatches, unknown methods, wrong arity, unresolved imports). Disable to suppress all analyzer warnings."
+        },
         "wren.additionalModuleDirectories": {
           "type": "array",
           "items": {

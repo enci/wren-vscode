@@ -28,6 +28,7 @@ export class WrenLanguageService {
     private readonly documentCache = new Map<string, CachedAnalysis>();
     private readonly externalCache = new Map<string, ExternalCacheEntry>();
     private additionalSearchRoots: string[] = [];
+    private enableDiagnostics: boolean = true;
 
     constructor() {
         this.refreshConfiguration();
@@ -37,6 +38,9 @@ export class WrenLanguageService {
         if (!event || event.affectsConfiguration('wren.additionalModuleDirectories')) {
             this.refreshConfiguration();
             this.externalCache.clear();
+        }
+        if (event && event.affectsConfiguration('wren.enableDiagnostics')) {
+            this.refreshConfiguration();
         }
     }
 
@@ -93,8 +97,13 @@ export class WrenLanguageService {
     }
 
     async getDiagnostics(document: vscode.TextDocument): Promise<vscode.Diagnostic[]> {
-        // The analyzer now handles all diagnostics including unresolved-import warnings.
-        return this.analyzeAndCache(document).diagnostics;
+        const all = this.analyzeAndCache(document).diagnostics;
+        if (!this.enableDiagnostics) {
+            // Keep parse/scope errors, suppress analyzer warnings
+            const alwaysShow = new Set(['parse-error', 'duplicate-variable', 'undefined-variable']);
+            return all.filter(d => alwaysShow.has(String(d.code)));
+        }
+        return all;
     }
 
     /**
@@ -259,5 +268,6 @@ export class WrenLanguageService {
             }
         }
         this.additionalSearchRoots = [...roots];
+        this.enableDiagnostics = config.get<boolean>('enableDiagnostics', true);
     }
 }
