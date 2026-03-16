@@ -69,8 +69,12 @@ class AnalyzerDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
     constructor(private readonly service: WrenLanguageService) {}
 
     async provideDocumentSymbols(document: vscode.TextDocument): Promise<vscode.DocumentSymbol[]> {
-        const index = await this.service.getFileIndex(document);
-        return index.classes.map(convertClassToSymbol);
+        try {
+            const index = await this.service.getFileIndex(document);
+            return index.classes.map(convertClassToSymbol);
+        } catch {
+            return [];
+        }
     }
 }
 
@@ -83,22 +87,26 @@ class AnalyzerCompletionProvider implements vscode.CompletionItemProvider {
         _token: vscode.CancellationToken,
         _context: vscode.CompletionContext
     ): Promise<vscode.CompletionItem[]> {
-        const aggregate = await this.service.getWorkspaceAggregate(document);
-        const contextInfo = analyzeCompletionContext(document, position);
+        try {
+            const aggregate = await this.service.getWorkspaceAggregate(document);
+            const contextInfo = analyzeCompletionContext(document, position);
 
-        // Resolve type of lowercase receiver via AST type annotations / inference
-        if (contextInfo.isMemberAccess && contextInfo.receiver && !contextInfo.receiverIsClass) {
-            const offset = document.offsetAt(position);
-            const resolution = this.service.getTypedLocals(document, offset);
+            // Resolve type of lowercase receiver via AST type annotations / inference
+            if (contextInfo.isMemberAccess && contextInfo.receiver && !contextInfo.receiverIsClass) {
+                const offset = document.offsetAt(position);
+                const resolution = this.service.getTypedLocals(document, offset);
 
-            if (contextInfo.receiver === 'this') {
-                contextInfo.resolvedType = resolution.enclosingClass ?? undefined;
-            } else {
-                contextInfo.resolvedType = resolution.locals.get(contextInfo.receiver);
+                if (contextInfo.receiver === 'this') {
+                    contextInfo.resolvedType = resolution.enclosingClass ?? undefined;
+                } else {
+                    contextInfo.resolvedType = resolution.locals.get(contextInfo.receiver);
+                }
             }
-        }
 
-        return buildCompletionItems(aggregate, contextInfo);
+            return buildCompletionItems(aggregate, contextInfo);
+        } catch {
+            return [];
+        }
     }
 }
 
@@ -111,20 +119,24 @@ class AnalyzerSignatureHelpProvider implements vscode.SignatureHelpProvider {
         _token?: vscode.CancellationToken,
         _context?: vscode.SignatureHelpContext
     ): Promise<vscode.SignatureHelp | null> {
-        const aggregate = await this.service.getWorkspaceAggregate(document);
-        const contextInfo = analyzeSignatureContext(document, position);
-        if (!contextInfo) {
+        try {
+            const aggregate = await this.service.getWorkspaceAggregate(document);
+            const contextInfo = analyzeSignatureContext(document, position);
+            if (!contextInfo) {
+                return null;
+            }
+            const signatures = buildSignatures(aggregate, contextInfo);
+            if (!signatures.length) {
+                return null;
+            }
+            const help = new vscode.SignatureHelp();
+            help.signatures = signatures;
+            help.activeSignature = 0;
+            help.activeParameter = Math.min(contextInfo.parameterIndex, signatures[0].parameters.length - 1);
+            return help;
+        } catch {
             return null;
         }
-        const signatures = buildSignatures(aggregate, contextInfo);
-        if (!signatures.length) {
-            return null;
-        }
-        const help = new vscode.SignatureHelp();
-        help.signatures = signatures;
-        help.activeSignature = 0;
-        help.activeParameter = Math.min(contextInfo.parameterIndex, signatures[0].parameters.length - 1);
-        return help;
     }
 }
 

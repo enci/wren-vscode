@@ -27,6 +27,8 @@ interface IndexEntry {
 export class WrenLanguageService {
     private readonly documentCache = new Map<string, CachedAnalysis>();
     private readonly externalCache = new Map<string, ExternalCacheEntry>();
+    /** Most recent error-free analysis per file, used as IntelliSense fallback. */
+    private readonly lastGoodCache = new Map<string, CachedAnalysis>();
     private additionalSearchRoots: string[] = [];
     private enableDiagnostics: boolean = true;
 
@@ -52,6 +54,7 @@ export class WrenLanguageService {
     evictPath(fsPath: string) {
         this.documentCache.delete(fsPath);
         this.externalCache.delete(fsPath);
+        this.lastGoodCache.delete(fsPath);
     }
 
     /** Run full analysis (lexer + parser + resolver + type-checker) and cache the result. */
@@ -61,11 +64,56 @@ export class WrenLanguageService {
         if (cached && cached.index.version === document.version) {
             return cached;
         }
-        const searchPaths = this.getSearchPaths(document);
-        const { index, diagnostics, module } = analyzeDocument(document, searchPaths);
-        const entry = { index, diagnostics, module };
-        this.documentCache.set(key, entry);
-        return entry;
+
+        try {
+            const searchPaths = this.getSearchPaths(document);
+            const { index, diagnostics, module } = analyzeDocument(document, searchPaths);
+            const entry = { index, diagnostics, module };
+            this.documentCache.set(key, entry);
+
+            // If this parse was clean (no parse errors), save as last-good
+            const hasParseErrors = diagnostics.some(d => String(d.code) === 'parse-error');
+            if (!hasParseErrors) {
+                this.lastGoodCache.set(key, entry);
+            }
+
+            return entry;
+        } catch {
+            // Analysis failed (likely malformed AST). Return last-good if available,
+            // otherwise return an empty result so callers don't crash.
+            const lastGood = this.lastGoodCache.get(key);
+            if (lastGood) {
+                return lastGood;
+            }
+            const emptyIndex: WrenFileIndex = {
+                uri: document.uri,
+                version: document.version,
+                classes: [],
+                imports: [],
+                parsedAt: Date.now(),
+            };
+            return { index: emptyIndex, diagnostics: [], module: { kind: 'Module', statements: [] } };
+        }
+    }
+
+    /**
+     * Return analysis results suitable for IntelliSense (completions, signatures, symbols).
+     * Prefers the last error-free analysis when the current parse has errors, so that
+     * completions don't vanish during transient syntax errors while typing.
+     */
+    private getAnalysisForIntellisense(document: vscode.TextDocument): CachedAnalysis {
+        const current = this.analyzeAndCache(document);
+        const key = document.uri.fsPath;
+
+        const hasParseErrors = current.diagnostics.some(d => String(d.code) === 'parse-error');
+        if (hasParseErrors) {
+            const lastGood = this.lastGoodCache.get(key);
+            if (lastGood) {
+                return lastGood;
+            }
+        }
+
+        return current;
     }
 
     /**
@@ -93,7 +141,7 @@ export class WrenLanguageService {
     }
 
     async getFileIndex(document: vscode.TextDocument): Promise<WrenFileIndex> {
-        return this.analyzeAndCache(document).index;
+        return this.getAnalysisForIntellisense(document).index;
     }
 
     async getDiagnostics(document: vscode.TextDocument): Promise<vscode.Diagnostic[]> {
@@ -111,7 +159,7 @@ export class WrenLanguageService {
      * Returns variable→type mappings and the enclosing class name (for `this.`).
      */
     getTypedLocals(document: vscode.TextDocument, offset: number): TypeResolution {
-        const cached = this.analyzeAndCache(document);
+        const cached = this.getAnalysisForIntellisense(document);
         return resolveTypeAtPosition(cached.module, offset);
     }
 
