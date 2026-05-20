@@ -2,7 +2,7 @@
   "name": "wren",
   "displayName": "Wren Language",
   "description": "Syntax highlighting, IntelliSense, diagnostics, and code navigation for the Wren programming language",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "BojanEndrovski",
   "engines": {
     "vscode": "^1.60.0"
