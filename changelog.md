@@ -2,7 +2,19 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
-## [0.2.0] - 2025-02-12
+## [0.2.1] - 2026-03-16
+
+### Added
+- `wren.enableDiagnostics` setting to toggle analyzer diagnostics on/off
+- Hover provider: shows type info for classes, methods, fields, variables, and `this`
+- Go-to-definition: navigate to class definitions, methods, fields, variables, and import paths (cross-file)
+- Return type annotations shown in hover and completion details (e.g. `-> ReturnType`)
+
+### Changed
+- Graceful error handling in the analyzer for more reliable autocomplete when code has errors
+- `null` is now treated as a compatible value for any type in the analyzer
+
+## [0.2.0] - 2026-02-12
 
 ### Added
 - Full analysis pipeline (lexer → parser → resolver → type-checker) powered by wren-analyzer

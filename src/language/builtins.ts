@@ -60,7 +60,8 @@ function convertMethod(className: string, m: Method): WrenMethodSymbol {
     if (isConstructor) prefixes.push('construct');
     if (isStatic) prefixes.push('static');
     const qualifier = prefixes.length ? `${prefixes.join(' ')} ` : '';
-    const detail = `${qualifier}${className}.${m.name.text}(${params.join(', ')})`;
+    const returnSuffix = m.returnType ? ` -> ${m.returnType.name.text}` : '';
+    const detail = `${qualifier}${className}.${m.name.text}(${params.join(', ')})${returnSuffix}`;
 
     return {
         name: m.name.text,

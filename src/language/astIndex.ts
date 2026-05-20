@@ -174,6 +174,7 @@ function buildClassSymbol(document: vscode.TextDocument, cls: ClassStmt): WrenCl
         methods,
         staticMethods,
         fields,
+        uri: document.uri,
     };
 }
 
@@ -211,10 +212,12 @@ function buildMethodSymbol(
         }
     }
 
+    const returnType = method.returnType?.name.text ?? null;
     const detail = buildSignatureLabel(className, name, params, {
         isStatic,
         isConstructor,
         isForeign,
+        returnType,
     });
 
     // Method range: from first keyword to end of body (or end of name for foreign)
@@ -250,6 +253,7 @@ function buildMethodSymbol(
         range,
         detail,
         className,
+        uri: document.uri,
     };
 }
 
@@ -257,19 +261,20 @@ function buildSignatureLabel(
     className: string,
     methodName: string,
     params: string[],
-    qualifiers: { isStatic: boolean; isConstructor: boolean; isForeign: boolean },
+    qualifiers: { isStatic: boolean; isConstructor: boolean; isForeign: boolean; returnType?: string | null },
 ): string {
     const prefixes: string[] = [];
     if (qualifiers.isConstructor) prefixes.push('construct');
     if (qualifiers.isForeign) prefixes.push('foreign');
     if (qualifiers.isStatic) prefixes.push('static');
     const qualifierBlock = prefixes.length ? `${prefixes.join(' ')} ` : '';
+    const returnSuffix = qualifiers.returnType ? ` -> ${qualifiers.returnType}` : '';
 
     // Subscript operators already have brackets in the name
     if (methodName.startsWith('[')) {
-        return `${qualifierBlock}${className}.${methodName}`;
+        return `${qualifierBlock}${className}.${methodName}${returnSuffix}`;
     }
-    return `${qualifierBlock}${className}.${methodName}(${params.join(', ')})`;
+    return `${qualifierBlock}${className}.${methodName}(${params.join(', ')})${returnSuffix}`;
 }
 
 function tokenRange(document: vscode.TextDocument, token: Token): vscode.Range {

@@ -15,6 +15,7 @@ export interface WrenMethodSymbol {
     range: vscode.Range;
     detail: string;
     className: string;
+    uri?: vscode.Uri;
 }
 
 export interface WrenClassSymbol {
@@ -24,6 +25,7 @@ export interface WrenClassSymbol {
     methods: WrenMethodSymbol[];
     staticMethods: WrenMethodSymbol[];
     fields: WrenFieldSymbol[];
+    uri?: vscode.Uri;
 }
 
 export interface WrenImportSymbol {
