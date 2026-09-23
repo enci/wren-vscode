@@ -269,7 +269,7 @@
         },
         "foreignMethod": {
             "name": "meta.method.wren",
-            "begin": "\\b(foreign)\\s+(?:\\b(construct|static)\\s+)?(\\w+=|\\w+|\\+|-|\\*|\\/|%|<=?|>=?|==|!=?|&|\\||~)",
+            "begin": "\\b(foreign)\\s+(?:\\b(construct|static)\\s+)?(\\w+=|\\w+|\\+|-|\\*|\\/|%|<=?|>=?|==|!=?|&|\\||~|\\[[^\\]]*\\]=?)",
             "beginCaptures": {
                 "1": { "name": "storage.modifier.wren" },
                 "2": { "name": "storage.modifier.wren" },
@@ -294,24 +294,38 @@
         },
         "subscriptOperatorSetter": {
             "name": "meta.method.subscript.setter.wren",
-            "begin": "\\[([^\\]]+)\\]\\s*=\\s*\\(([^)]*)\\)\\s*\\{",
+            "begin": "\\[[^\\]]*\\]\\s*=\\s*\\([^)]*\\)",
             "beginCaptures": {
                 "0": { "name": "entity.name.function.wren" }
             },
             "end": "}",
             "patterns": [
-                { "include": "#code" }
+                {
+                    "name": "meta.method.body.wren",
+                    "begin": "{",
+                    "end": "(?=})",
+                    "patterns": [
+                        { "include": "#code" }
+                    ]
+                }
             ]
         },
         "subscriptOperatorGetter": {
             "name": "meta.method.subscript.getter.wren",
-            "begin": "\\[([^\\]]+)\\]\\s*\\{",
+            "begin": "\\[[^\\]]*\\](?!\\s*=)",
             "beginCaptures": {
                 "0": { "name": "entity.name.function.wren" }
             },
             "end": "}",
             "patterns": [
-                { "include": "#code" }
+                {
+                    "name": "meta.method.body.wren",
+                    "begin": "{",
+                    "end": "(?=})",
+                    "patterns": [
+                        { "include": "#code" }
+                    ]
+                }
             ]
         },
         "class": {
