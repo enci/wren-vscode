@@ -2,7 +2,7 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
-## [Unreleased]
+## [0.3.0] - 2026-11-20
 
 ### Added
 - Argument type checking: passing a value whose type is known (literal, annotated variable/parameter, or a call with an annotated return type) to a parameter annotated with an incompatible type now warns, e.g. `Data.getBool(5)` -> "Argument 1 of 'Data.getBool' expects String but got Num". Subclasses and `null` are accepted; unannotated parameters accept anything. Operator arguments (`1 + "a"`) are checked too.
