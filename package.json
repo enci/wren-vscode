@@ -35,8 +35,12 @@
     "languages": [
       {
         "id": "wren",
-        "extensions": [".wren"],
-        "aliases": ["Wren"],
+        "extensions": [
+          ".wren"
+        ],
+        "aliases": [
+          "Wren"
+        ],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./resources/icons/wren-file-light.svg",
@@ -46,9 +50,9 @@
     ],
     "grammars": [
       {
-          "language": "wren",
-          "scopeName": "source.wren",
-          "path": "./syntaxes/wren.json"
+        "language": "wren",
+        "scopeName": "source.wren",
+        "path": "./syntaxes/wren.json"
       }
     ],
     "configuration": {
@@ -75,12 +79,14 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^24.9.2",
     "@types/vscode": "^1.60.0",
     "@vscode/vsce": "^3.6.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   }
 }

@@ -2,6 +2,15 @@
 
 All notable changes to the "Wren" extension will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Argument type checking: passing a value whose type is known (literal, annotated variable/parameter, or a call with an annotated return type) to a parameter annotated with an incompatible type now warns, e.g. `Data.getBool(5)` -> "Argument 1 of 'Data.getBool' expects String but got Num". Subclasses and `null` are accepted; unannotated parameters accept anything. Operator arguments (`1 + "a"`) are checked too.
+
+### Fixed
+- Go-to-definition rewritten to resolve on the AST with real lexical scopes. It now handles chained calls (`a.b.c`), calls on fields (`_pos.x`) and on call results, inherited methods (across files), implicit `this` calls (`update()` inside a class), arity overloads and getter/setter pairs, parameters with the same name in different methods, shadowed variables, variables inside closures, capitalized module variables, fields first assigned in nested expressions, `super` calls, user-defined operators, and class names in type annotations.
+- `Random.new(seed)` no longer restricts the seed to `Num` (Wren also accepts a sequence of numbers).
+
 ## [0.2.3] - 2026-09-23
 
 ### Fixed

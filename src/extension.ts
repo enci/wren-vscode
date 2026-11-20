@@ -3,7 +3,9 @@ import { WrenLanguageService } from './language/languageService';
 import { AggregatedWorkspaceIndex, WrenClassSymbol, WrenMethodSymbol, WrenFileIndex } from './language/types';
 import { getCoreRegistry } from '../wren-analyzer/src/core/core-registry';
 import { isBuiltinModule } from '../wren-analyzer/src/index';
-import type { Module, Stmt, Expr, Method, Body, ClassStmt, Token } from '../wren-analyzer/src/index';
+import type { Module, Token, ClassStmt } from '../wren-analyzer/src/index';
+import { findDefinition, importStatements } from './language/definition';
+import type { ModuleGraph, ModuleImport } from './language/definition';
 
 const KEYWORDS = ['class', 'construct', 'foreign', 'import', 'return', 'static', 'var'];
 
@@ -553,376 +555,49 @@ class WrenDefinitionProvider implements vscode.DefinitionProvider {
         position: vscode.Position,
     ): Promise<vscode.Definition | null> {
         try {
-            const wordRange = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_]*/);
-            if (!wordRange) {
-                // Maybe cursor is on an import path string
-                return this.findImportPathDefinition(document, position);
+            const file = document.uri.fsPath;
+            const graph = await this.buildGraph(document);
+            const target = findDefinition(graph, file, document.offsetAt(position));
+            if (!target) return null;
+
+            const uri = vscode.Uri.file(target.file);
+            if (target.isFile) {
+                return new vscode.Location(uri, new vscode.Position(0, 0));
             }
-            const word = document.getText(wordRange);
-
-            const line = document.lineAt(position.line).text;
-            const beforeWord = line.slice(0, wordRange.start.character);
-            const ctx = analyzeSymbolContext(beforeWord, word);
-            const offset = document.offsetAt(position);
-
-            switch (ctx.kind) {
-                case 'class-name':
-                    return this.findClassDefinition(document, word);
-
-                case 'method-on-class':
-                    return this.findMethodDefinition(document, ctx.receiver!, word, true);
-
-                case 'method-on-instance': {
-                    const resolution = this.service.getTypedLocals(document, offset);
-                    const receiverType = ctx.receiver === 'this'
-                        ? resolution.enclosingClass
-                        : resolution.locals.get(ctx.receiver!);
-                    if (receiverType) {
-                        return this.findMethodDefinition(document, receiverType, word, false);
-                    }
-                    return null;
-                }
-
-                case 'field':
-                    return this.findFieldDefinition(document, word, offset);
-
-                case 'standalone': {
-                    // Try variable declaration first
-                    const varDef = this.findVariableDeclaration(document, word, offset);
-                    if (varDef) return varDef;
-                    // Try class name
-                    return this.findClassDefinition(document, word);
-                }
-
-                default:
-                    return null;
-            }
+            const targetDoc = target.file === file
+                ? document
+                : await vscode.workspace.openTextDocument(uri);
+            return new vscode.Location(uri, new vscode.Range(
+                targetDoc.positionAt(target.start),
+                targetDoc.positionAt(target.start + target.length),
+            ));
         } catch {
             return null;
         }
     }
 
-    private async findClassDefinition(document: vscode.TextDocument, className: string): Promise<vscode.Location | null> {
-        // Check current file
-        const index = await this.service.getFileIndex(document);
-        const cls = index.classes.find(c => c.name === className);
-        if (cls && !isBuiltinSymbol(cls)) {
-            return new vscode.Location(cls.uri!, cls.selectionRange);
-        }
-
-        // Check imports
-        return this.findInImports(document, index, className);
-    }
-
-    private async findMethodDefinition(
-        document: vscode.TextDocument,
-        className: string,
-        methodName: string,
-        isStatic: boolean,
-    ): Promise<vscode.Location | null> {
-        // Search current file
-        const index = await this.service.getFileIndex(document);
-        const localResult = this.findMethodInIndex(index, className, methodName, isStatic);
-        if (localResult) return localResult;
-
-        // Search imports
-        for (const imp of index.imports) {
-            if (isBuiltinModule(imp.moduleName)) continue;
-            const resolvedPath = this.service.resolveModulePath(document, imp.moduleName);
-            if (!resolvedPath) continue;
-            const importedIndex = await this.service.getFileIndexByPath(resolvedPath);
-            if (!importedIndex) continue;
-            const result = this.findMethodInIndex(importedIndex, className, methodName, isStatic);
-            if (result) return result;
-        }
-
-        return null;
-    }
-
-    private findMethodInIndex(
-        index: WrenFileIndex,
-        className: string,
-        methodName: string,
-        isStatic: boolean,
-    ): vscode.Location | null {
-        const cls = index.classes.find(c => c.name === className);
-        if (!cls || isBuiltinSymbol(cls)) return null;
-        const methods = isStatic ? cls.staticMethods : cls.methods;
-        const method = methods.find(m => m.name === methodName);
-        if (method) {
-            return new vscode.Location(cls.uri!, method.range);
-        }
-        return null;
-    }
-
-    private async findInImports(
-        document: vscode.TextDocument,
-        index: WrenFileIndex,
-        className: string,
-    ): Promise<vscode.Location | null> {
-        for (const imp of index.imports) {
-            if (isBuiltinModule(imp.moduleName)) continue;
-            // If import uses `for`, check if className is in the list
-            if (imp.variables !== null && !imp.variables.includes(className)) continue;
-            const resolvedPath = this.service.resolveModulePath(document, imp.moduleName);
-            if (!resolvedPath) continue;
-            const importedIndex = await this.service.getFileIndexByPath(resolvedPath);
-            if (!importedIndex) continue;
-            const cls = importedIndex.classes.find(c => c.name === className);
-            if (cls && !isBuiltinSymbol(cls)) {
-                return new vscode.Location(cls.uri!, cls.selectionRange);
+    /** Load the current module and everything it (transitively) imports. */
+    private async buildGraph(document: vscode.TextDocument): Promise<ModuleGraph> {
+        const graph: ModuleGraph = new Map();
+        const queue: { file: string; module: Module }[] = [
+            { file: document.uri.fsPath, module: this.service.getModule(document) },
+        ];
+        const MAX_MODULES = 200;
+        while (queue.length > 0 && graph.size < MAX_MODULES) {
+            const { file, module } = queue.shift()!;
+            if (graph.has(file)) continue;
+            const imports: ModuleImport[] = importStatements(module).map(imp => ({
+                moduleName: imp.moduleName,
+                variables: imp.variables,
+                resolvedPath: this.service.resolveModulePathFrom(file, imp.moduleName),
+            }));
+            graph.set(file, { file, module, imports });
+            for (const imp of imports) {
+                if (!imp.resolvedPath || graph.has(imp.resolvedPath)) continue;
+                const mod = await this.service.getModuleByPath(imp.resolvedPath);
+                if (mod) queue.push({ file: imp.resolvedPath, module: mod });
             }
         }
-        return null;
+        return graph;
     }
-
-    private findFieldDefinition(
-        document: vscode.TextDocument,
-        fieldName: string,
-        offset: number,
-    ): vscode.Location | null {
-        const resolution = this.service.getTypedLocals(document, offset);
-        if (!resolution.enclosingClass) return null;
-        const module = this.service.getModule(document);
-        for (const stmt of module.statements) {
-            if (stmt.kind === 'ClassStmt') {
-                const cls = stmt as ClassStmt;
-                if (cls.name.text !== resolution.enclosingClass) continue;
-                // Search all method bodies for the first assignment to this field
-                for (const method of cls.methods) {
-                    if (!method.body) continue;
-                    const fieldToken = findFieldInBody(method.body, fieldName);
-                    if (fieldToken) {
-                        return new vscode.Location(document.uri, tokenToRange(document, fieldToken));
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private findVariableDeclaration(
-        document: vscode.TextDocument,
-        varName: string,
-        cursorOffset: number,
-    ): vscode.Location | null {
-        const module = this.service.getModule(document);
-        return findDeclInModule(module, varName, cursorOffset, document);
-    }
-
-    private async findImportPathDefinition(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-    ): Promise<vscode.Location | null> {
-        const index = await this.service.getFileIndex(document);
-        for (const imp of index.imports) {
-            if (imp.range.contains(position)) {
-                if (isBuiltinModule(imp.moduleName)) return null;
-                const resolvedPath = this.service.resolveModulePath(document, imp.moduleName);
-                if (resolvedPath) {
-                    return new vscode.Location(
-                        vscode.Uri.file(resolvedPath),
-                        new vscode.Position(0, 0),
-                    );
-                }
-            }
-        }
-        return null;
-    }
-}
-
-// =============================================================================
-// Variable declaration finder (AST walk)
-// =============================================================================
-
-function findDeclInModule(module: Module, name: string, offset: number, doc: vscode.TextDocument): vscode.Location | null {
-    for (const stmt of module.statements) {
-        const result = findDeclInStmt(stmt, name, offset, doc);
-        if (result) return result;
-    }
-    return null;
-}
-
-function findDeclInStmt(stmt: Stmt, name: string, offset: number, doc: vscode.TextDocument): vscode.Location | null {
-    switch (stmt.kind) {
-        case 'VarStmt':
-            if (stmt.name.text === name && stmt.name.start < offset) {
-                return new vscode.Location(doc.uri, tokenToRange(doc, stmt.name));
-            }
-            return null;
-
-        case 'ClassStmt': {
-            const cls = stmt as ClassStmt;
-            const classStart = cls.foreignKeyword?.start ?? cls.classKeyword.start;
-            const classEnd = cls.rightBrace.start + cls.rightBrace.length;
-            if (offset < classStart || offset > classEnd) return null;
-
-            for (const method of cls.methods) {
-                const result = findDeclInMethod(method, name, offset, doc);
-                if (result) return result;
-            }
-            return null;
-        }
-
-        case 'ImportStmt':
-            if (stmt.variables) {
-                for (const v of stmt.variables) {
-                    if (v.text === name) {
-                        return new vscode.Location(doc.uri, tokenToRange(doc, v));
-                    }
-                }
-            }
-            return null;
-
-        case 'ForStmt': {
-            const forStart = stmt.variable.start;
-            const forBody = stmt.body;
-            if (offset >= forStart && stmt.variable.text === name) {
-                return new vscode.Location(doc.uri, tokenToRange(doc, stmt.variable));
-            }
-            return findDeclInStmt(forBody, name, offset, doc);
-        }
-
-        case 'BlockStmt':
-            for (const s of stmt.statements) {
-                const result = findDeclInStmt(s, name, offset, doc);
-                if (result) return result;
-            }
-            return null;
-
-        case 'IfStmt': {
-            const r1 = findDeclInStmt(stmt.thenBranch, name, offset, doc);
-            if (r1) return r1;
-            if (stmt.elseBranch) return findDeclInStmt(stmt.elseBranch, name, offset, doc);
-            return null;
-        }
-
-        case 'WhileStmt':
-            return findDeclInStmt(stmt.body, name, offset, doc);
-
-        default:
-            // Expression statement — check for block arguments
-            if (typeof stmt === 'object' && stmt !== null && 'kind' in stmt) {
-                return findDeclInExpr(stmt as Expr, name, offset, doc);
-            }
-            return null;
-    }
-}
-
-function findDeclInMethod(method: Method, name: string, offset: number, doc: vscode.TextDocument): vscode.Location | null {
-    // Check method range — only search if cursor is within this method
-    const methodStart = method.foreignKeyword?.start ?? method.staticKeyword?.start ?? method.constructKeyword?.start ?? method.name.start;
-    // We don't have the closing brace token, so check body
-    if (offset < methodStart) return null;
-
-    if (method.parameters) {
-        for (const param of method.parameters) {
-            if (param.name.text === name) {
-                return new vscode.Location(doc.uri, tokenToRange(doc, param.name));
-            }
-        }
-    }
-    if (method.subscriptParameters) {
-        for (const param of method.subscriptParameters) {
-            if (param.name.text === name) {
-                return new vscode.Location(doc.uri, tokenToRange(doc, param.name));
-            }
-        }
-    }
-    if (method.body) {
-        return findDeclInBody(method.body, name, offset, doc);
-    }
-    return null;
-}
-
-function findDeclInBody(body: Body, name: string, offset: number, doc: vscode.TextDocument): vscode.Location | null {
-    // Check block parameters ({|x, y| ...})
-    if (body.parameters) {
-        for (const param of body.parameters) {
-            if (param.name.text === name) {
-                return new vscode.Location(doc.uri, tokenToRange(doc, param.name));
-            }
-        }
-    }
-    if (body.statements) {
-        for (const s of body.statements) {
-            const result = findDeclInStmt(s, name, offset, doc);
-            if (result) return result;
-        }
-    }
-    if (body.expression) {
-        return findDeclInExpr(body.expression, name, offset, doc);
-    }
-    return null;
-}
-
-function findDeclInExpr(expr: Expr, name: string, offset: number, doc: vscode.TextDocument): vscode.Location | null {
-    if (!expr || typeof expr !== 'object') return null;
-    switch (expr.kind) {
-        case 'CallExpr':
-            if (expr.blockArgument) {
-                return findDeclInBody(expr.blockArgument, name, offset, doc);
-            }
-            return null;
-        default:
-            return null;
-    }
-}
-
-// =============================================================================
-// Field finder (for go-to-definition on _field / __field)
-// =============================================================================
-
-function findFieldInBody(body: Body, fieldName: string): Token | null {
-    if (body.statements) {
-        for (const stmt of body.statements) {
-            const result = findFieldInStmt(stmt, fieldName);
-            if (result) return result;
-        }
-    }
-    if (body.expression) {
-        return findFieldInExpr(body.expression, fieldName);
-    }
-    return null;
-}
-
-function findFieldInStmt(stmt: Stmt, fieldName: string): Token | null {
-    switch (stmt.kind) {
-        case 'BlockStmt':
-            for (const s of stmt.statements) {
-                const r = findFieldInStmt(s, fieldName);
-                if (r) return r;
-            }
-            return null;
-        case 'IfStmt': {
-            const r1 = findFieldInStmt(stmt.thenBranch, fieldName);
-            if (r1) return r1;
-            return stmt.elseBranch ? findFieldInStmt(stmt.elseBranch, fieldName) : null;
-        }
-        case 'WhileStmt':
-            return findFieldInStmt(stmt.body, fieldName);
-        case 'ForStmt':
-            return findFieldInStmt(stmt.body, fieldName);
-        default:
-            if (typeof stmt === 'object' && 'kind' in stmt) {
-                return findFieldInExpr(stmt as Expr, fieldName);
-            }
-            return null;
-    }
-}
-
-function findFieldInExpr(expr: Expr, fieldName: string): Token | null {
-    if (!expr || typeof expr !== 'object') return null;
-    if (expr.kind === 'FieldExpr' && expr.name.text === fieldName) {
-        return expr.name;
-    }
-    if (expr.kind === 'StaticFieldExpr' && expr.name.text === fieldName) {
-        return expr.name;
-    }
-    if (expr.kind === 'AssignmentExpr') {
-        const r = findFieldInExpr(expr.target, fieldName);
-        if (r) return r;
-        return findFieldInExpr(expr.value, fieldName);
-    }
-    return null;
 }

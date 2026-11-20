@@ -168,6 +168,23 @@ export class WrenLanguageService {
         return this.getAnalysisForIntellisense(document).module;
     }
 
+    /** Resolve a Wren module name relative to a file path (null for built-ins / unresolved). */
+    resolveModulePathFrom(fromFile: string, moduleName: string): string | null {
+        if (isBuiltinModule(moduleName)) return null;
+        const resolver = new ModuleResolver(this.getSearchPathsForFile(fromFile));
+        return resolver.resolve(moduleName, fromFile);
+    }
+
+    /** Load the Module AST for a file path, preferring an open editor's contents. */
+    async getModuleByPath(fsPath: string): Promise<Module | undefined> {
+        const document = vscode.workspace.textDocuments.find(doc => doc.uri.fsPath === fsPath);
+        if (document) {
+            return this.getModule(document);
+        }
+        await this.loadIndex(fsPath); // populates externalCache
+        return this.externalCache.get(fsPath)?.analysis.module;
+    }
+
     /** Load a file index by filesystem path (for cross-file navigation). */
     async getFileIndexByPath(fsPath: string): Promise<WrenFileIndex | undefined> {
         return this.loadIndex(fsPath);
