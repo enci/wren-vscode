@@ -12,3 +12,7 @@ tsconfig.json
 **/*.ts
 node_modules/**
 .DS_Store
+
+# Readme-only images (vsce rewrites readme links to GitHub)
+resources/screenshots/**
+resources/icons/*.png
